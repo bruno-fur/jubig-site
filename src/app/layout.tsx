@@ -5,6 +5,8 @@ import { pegarSessao } from "@/lib/sessao";
 import { AvisoEmailNaoConfirmado } from "@/components/AvisoEmailNaoConfirmado";
 import { Cabecalho } from "@/components/Cabecalho";
 import { Rodape } from "@/components/Rodape";
+import { SemConfiguracao } from "@/components/SemConfiguracao";
+import { faltandoConfiguracao } from "@/lib/supabase/config";
 
 const titulo = Archivo({
   subsets: ["latin"],
@@ -38,6 +40,14 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /*
+   * Antes de qualquer consulta: sem as chaves do Supabase o cliente estoura
+   * aqui mesmo, no layout, e aí nem a página de erro renderiza — o visitante
+   * recebe um "Internal Server Error" sem uma linha de explicação.
+   */
+  const faltando = faltandoConfiguracao();
+  if (faltando.length > 0) return <SemConfiguracao faltando={faltando} />;
+
   const sessao = await pegarSessao();
 
   return (

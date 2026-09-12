@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { faltandoConfiguracao } from "./config";
 
 /**
  * Renova o cookie de sessão a cada navegação. Sem isso o token expira e o
@@ -10,6 +11,20 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 export async function atualizarSessao(req: NextRequest) {
   let resposta = NextResponse.next({ request: req });
+
+  /*
+   * Sem as chaves, o `createServerClient` estoura aqui dentro — e erro em
+   * proxy derruba TODA requisição, inclusive a página de erro e o 404. O
+   * resultado é o site inteiro devolvendo "Internal Server Error" em branco.
+   *
+   * Deixar passar não abre brecha: quem protege as rotas é `exigirLogin` e a
+   * RLS, que continuam valendo. O layout raiz cuida de avisar o que falta.
+   */
+  const faltando = faltandoConfiguracao();
+  if (faltando.length > 0) {
+    console.error("[proxy] sem configuração do Supabase, faltam:", faltando.join(", "));
+    return resposta;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
