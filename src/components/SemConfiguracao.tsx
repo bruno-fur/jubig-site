@@ -50,6 +50,9 @@ export function SemConfiguracao({ faltando }: { faltando: string[] }) {
             <strong>é preciso um novo deploy</strong> depois de salvar — recarregar a página não
             resolve.
           </p>
+          <p style={{ margin: "14px 0 0", color: "#7A6350", fontSize: 12.5, fontFamily: "ui-monospace, monospace" }}>
+            build {process.env.BUILD_COMMIT} · {process.env.BUILD_EM?.replace("T", " ").slice(0, 16)} UTC
+          </p>
         </main>
       </body>
     </html>
