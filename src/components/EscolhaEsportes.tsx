@@ -1,19 +1,18 @@
 "use client";
 
-import { useId } from "react";
 import { Juca } from "./juca/Juca";
-import type { VagaEsporte } from "@/tipos/db";
+import { ROTULO_TURNO, type Turno, type VagaEsporte } from "@/tipos/db";
 
 /**
- * Modalidades agrupadas por horário.
+ * Modalidades agrupadas por turno.
  *
- * O conflito de horário não é validado depois: dentro de um horário só existe
- * uma escolha possível, porque cada grupo é um conjunto de rádios. Não dá para
- * marcar duas coisas no mesmo horário nem sem querer.
+ * Caixas de seleção, não rádios: dá para pegar mais de uma modalidade no mesmo
+ * turno. Quem decide quantas é `eventos.max_esportes_por_turno` — 0 é sem
+ * limite. A tela avisa quando o limite chega; quem recusa de verdade é o
+ * trigger do banco, que segura a linha da modalidade até o commit.
  *
- * Vaga esgotada desabilita a opção — mas quem decide de verdade é o trigger do
- * banco, que segura a linha da modalidade até o commit. A tela pode estar
- * desatualizada; o banco, não.
+ * Vaga esgotada desabilita a opção, mas a contagem na tela pode estar velha —
+ * duas caravanas preenchendo ao mesmo tempo veem a mesma. O banco, não.
  */
 export function EscolhaEsportes({
   titulo,
@@ -21,27 +20,27 @@ export function EscolhaEsportes({
   escolhidos,
   deBoa,
   erro,
+  maxPorTurno = 0,
   aoEscolher,
   aoMarcarDeBoa,
 }: {
   titulo: string;
-  grupos: [string, VagaEsporte[]][];
+  grupos: [Turno, VagaEsporte[]][];
   escolhidos: string[];
   deBoa: boolean;
   erro?: string;
+  maxPorTurno?: number;
   aoEscolher: (ids: string[]) => void;
   aoMarcarDeBoa: (v: boolean) => void;
 }) {
-  const grupo = useId();
-
-  function trocar(horario: string, id: string) {
-    const doHorario = new Set(
-      grupos.find(([h]) => h === horario)?.[1].map((e) => e.esporte_id) ?? []
+  function alternar(id: string) {
+    aoEscolher(
+      escolhidos.includes(id) ? escolhidos.filter((x) => x !== id) : [...escolhidos, id]
     );
-    // Tira o que já estava marcado neste horário e põe o novo.
-    const resto = escolhidos.filter((x) => !doHorario.has(x));
-    aoEscolher(escolhidos.includes(id) ? resto : [...resto, id]);
   }
+
+  const quantosNoTurno = (lista: VagaEsporte[]) =>
+    lista.filter((e) => escolhidos.includes(e.esporte_id)).length;
 
   return (
     <fieldset className={`cartao p-5 ${erro ? "border-ruim" : ""}`}>
@@ -60,55 +59,72 @@ export function EscolhaEsportes({
       </label>
 
       <div className={deBoa ? "pointer-events-none mt-4 space-y-5 opacity-40" : "mt-4 space-y-5"}>
-        {grupos.map(([horario, lista]) => (
-          <div key={horario}>
-            <p className="mb-2 text-sm font-semibold text-apagado">
-              {horario} <span className="font-normal">· escolha uma</span>
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {lista.map((e) => {
-                const lotada = e.restantes <= 0;
-                const marcado = escolhidos.includes(e.esporte_id);
-                return (
-                  <label
-                    key={e.esporte_id}
-                    className={`flex items-center gap-3 rounded-[10px] border-2 p-3 text-sm ${
-                      lotada
-                        ? "cursor-not-allowed border-linha bg-areia/50 text-apagado"
-                        : marcado
-                          ? "cursor-pointer border-laranja bg-laranja/10"
-                          : "cursor-pointer border-linha hover:border-laranja/60"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`${grupo}-${horario}`}
-                      disabled={lotada || deBoa}
-                      checked={marcado}
-                      onChange={() => trocar(horario, e.esporte_id)}
-                      onClick={() => marcado && trocar(horario, e.esporte_id)}
-                      className="h-4 w-4 accent-[#D94C1A]"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold text-tinta">{e.nome}</span>
-                      <span className="block text-xs text-apagado">
-                        {lotada
-                          ? "Lotada"
-                          : e.restantes <= 5
-                            ? `Restam ${e.restantes}`
-                            : `${e.restantes} vagas`}
-                        {e.por_equipe && " · por equipe"}
+        {grupos.map(([turno, lista]) => {
+          const marcadas = quantosNoTurno(lista);
+          const noLimite = maxPorTurno > 0 && marcadas >= maxPorTurno;
+
+          return (
+            <div key={turno}>
+              <p className="mb-2 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold text-apagado">
+                {ROTULO_TURNO[turno]}
+                <span className="font-normal">
+                  {maxPorTurno > 0
+                    ? `· até ${maxPorTurno} ${maxPorTurno === 1 ? "modalidade" : "modalidades"}`
+                    : "· quantas quiser"}
+                </span>
+                {marcadas > 0 && (
+                  <span className="font-normal text-laranja-escuro">
+                    · {marcadas} escolhida{marcadas > 1 ? "s" : ""}
+                  </span>
+                )}
+              </p>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {lista.map((e) => {
+                  const lotada = e.restantes <= 0;
+                  const marcado = escolhidos.includes(e.esporte_id);
+                  // No limite, as não marcadas travam — mas dá para desmarcar.
+                  const travada = lotada || (noLimite && !marcado);
+
+                  return (
+                    <label
+                      key={e.esporte_id}
+                      className={`flex items-center gap-3 rounded-[10px] border-2 p-3 text-sm ${
+                        travada
+                          ? "cursor-not-allowed border-linha bg-areia/50 text-apagado"
+                          : marcado
+                            ? "cursor-pointer border-laranja bg-laranja/10"
+                            : "cursor-pointer border-linha hover:border-laranja/60"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={travada || deBoa}
+                        checked={marcado}
+                        onChange={() => alternar(e.esporte_id)}
+                        className="h-4 w-4 accent-[#D94C1A]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-tinta">{e.nome}</span>
+                        <span className="block text-xs text-apagado">
+                          {lotada
+                            ? "Lotada"
+                            : e.restantes <= 5
+                              ? `Restam ${e.restantes}`
+                              : `${e.restantes} vagas`}
+                          {e.por_equipe && " · por equipe"}
+                        </span>
                       </span>
-                    </span>
-                    {lotada && (
-                      <img src="/juca/choro.webp" alt="" className="h-8 w-8 object-contain" />
-                    )}
-                  </label>
-                );
-              })}
+                      {lotada && (
+                        <img src="/juca/choro.webp" alt="" className="h-8 w-8 object-contain" />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {erro && (

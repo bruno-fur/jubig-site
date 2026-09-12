@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EscolhaEsportes } from "./EscolhaEsportes";
-import type { VagaEsporte } from "@/tipos/db";
+import type { Turno, VagaEsporte } from "@/tipos/db";
 
 export function TrocaEsporte({
   codigo,
@@ -13,14 +13,16 @@ export function TrocaEsporte({
   atuais,
   deBoa,
   prazo,
+  maxPorTurno,
 }: {
   codigo: string;
   inscritoId: string;
   nome: string;
-  grupos: [string, VagaEsporte[]][];
+  grupos: [Turno, VagaEsporte[]][];
   atuais: string[];
   deBoa: boolean;
   prazo: string;
+  maxPorTurno?: number;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -50,7 +52,7 @@ export function TrocaEsporte({
         {
           prazo_encerrado: `A troca fechou em ${prazo}.`,
           modalidade_lotada: "Essa modalidade lotou. Escolha outra.",
-          conflito_horario: "Tem duas modalidades no mesmo horário.",
+          limite_no_turno: "Passou do limite de modalidades no turno.",
           nao_encontrado: "Inscrição não encontrada.",
         }[corpo.erro as string] ?? "Não deu para salvar agora."
       );
@@ -80,6 +82,7 @@ export function TrocaEsporte({
         grupos={grupos}
         escolhidos={escolhidos}
         deBoa={soDeBoa}
+        maxPorTurno={maxPorTurno}
         erro={erro ?? undefined}
         aoEscolher={(ids) => {
           setEscolhidos(ids);

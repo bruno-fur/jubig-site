@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { criarClienteNavegador } from "@/lib/supabase/client";
+import { ROTULO_TURNO, type Turno } from "@/tipos/db";
 
-type Modalidade = { esporte_id: string; nome: string; horario: string };
+type Modalidade = { esporte_id: string; nome: string; turno: Turno };
 
 export function Exportar({ eventos }: { eventos: { slug: string; nome: string }[] }) {
   const [slug, setSlug] = useState(eventos[0]?.slug ?? "");
@@ -25,9 +26,9 @@ export function Exportar({ eventos }: { eventos: { slug: string; nome: string }[
 
       const { data } = await supabase
         .from("vagas_por_esporte")
-        .select("esporte_id, nome, horario")
+        .select("esporte_id, nome, turno")
         .eq("evento_id", evento.id)
-        .order("horario");
+        .order("turno");
 
       if (valendo) {
         setModalidades((data ?? []) as Modalidade[]);
@@ -77,7 +78,7 @@ export function Exportar({ eventos }: { eventos: { slug: string; nome: string }[
           <option value="">Todas as modalidades</option>
           {modalidades.map((m) => (
             <option key={m.esporte_id} value={m.esporte_id}>
-              {m.nome} ({m.horario})
+              {m.nome} ({ROTULO_TURNO[m.turno]})
             </option>
           ))}
         </select>

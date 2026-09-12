@@ -12,7 +12,7 @@ import { Etapas } from "@/components/Etapas";
 import { EscolhaEsportes } from "@/components/EscolhaEsportes";
 import { dataParaISO } from "@/lib/mascaras";
 import { formatarReais, idadeNaData, nomeCompleto, validarCPF, dataValida } from "@/lib/validacao";
-import type { VagaEsporte } from "@/tipos/db";
+import { ROTULO_TURNO, type Turno, type VagaEsporte } from "@/tipos/db";
 
 type EventoResumo = {
   slug: string;
@@ -20,6 +20,7 @@ type EventoResumo = {
   dataEvento: string;
   idadeMinima: number;
   maxParcelas: number;
+  maxEsportesPorTurno: number;
   valorCentavos: number;
 };
 
@@ -55,7 +56,7 @@ function pessoaVazia(igreja = ""): Pessoa {
 
 export function FormularioInscricao(props: {
   evento: EventoResumo;
-  grupos: [string, VagaEsporte[]][];
+  grupos: [Turno, VagaEsporte[]][];
   vagasRestantes: number | null;
   perfil: { nome: string; igreja: string; telefone: string };
 }) {
@@ -73,7 +74,7 @@ function Miolo({
   perfil,
 }: {
   evento: EventoResumo;
-  grupos: [string, VagaEsporte[]][];
+  grupos: [Turno, VagaEsporte[]][];
   vagasRestantes: number | null;
   perfil: { nome: string; igreja: string; telefone: string };
 }) {
@@ -186,7 +187,7 @@ function Miolo({
       // Erro de gente ou de CPF é na etapa 1; de modalidade, na 2.
       if (["nome_incompleto", "cpf_invalido", "cpf_repetido", "idade_minima", "cpf_ja_inscrito", "nascimento_invalido"].includes(corpo.erro))
         setEtapa(0);
-      else if (["modalidade_lotada", "conflito_horario", "sem_escolha"].includes(corpo.erro))
+      else if (["modalidade_lotada", "limite_no_turno", "sem_escolha"].includes(corpo.erro))
         setEtapa(1);
       return;
     }
@@ -257,6 +258,7 @@ function Miolo({
                 grupos={grupos}
                 escolhidos={p.esportes}
                 deBoa={p.deBoa}
+                maxPorTurno={evento.maxEsportesPorTurno}
                 erro={erros[`${i}.esportes`]}
                 aoEscolher={(esportes) => mexer(i, { esportes, deBoa: false })}
                 aoMarcarDeBoa={(deBoa) => mexer(i, { deBoa, esportes: deBoa ? [] : p.esportes })}
@@ -408,15 +410,15 @@ function Conferencia({
 }: {
   evento: EventoResumo;
   pessoas: Pessoa[];
-  grupos: [string, VagaEsporte[]][];
+  grupos: [Turno, VagaEsporte[]][];
   parcelas: number;
   aoTrocarParcelas: (n: number) => void;
   total: number;
 }) {
   const nomeDoEsporte = useMemo(() => {
     const mapa = new Map<string, string>();
-    grupos.forEach(([horario, lista]) =>
-      lista.forEach((e) => mapa.set(e.esporte_id, `${e.nome} (${horario})`))
+    grupos.forEach(([turno, lista]) =>
+      lista.forEach((e) => mapa.set(e.esporte_id, `${e.nome} (${ROTULO_TURNO[turno]})`))
     );
     return mapa;
   }, [grupos]);
@@ -502,8 +504,8 @@ function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: numb
       return `Falta escolher a modalidade ou marcar "vou só de boa"${quem}.`;
     case "modalidade_lotada":
       return "Uma das modalidades lotou enquanto você preenchia. Escolha outra.";
-    case "conflito_horario":
-      return "Tem duas modalidades no mesmo horário.";
+    case "limite_no_turno":
+      return "Passou do limite de modalidades permitido no turno.";
     case "evento_lotado":
       return "As vagas do evento acabaram.";
     case "inscricoes_encerradas":

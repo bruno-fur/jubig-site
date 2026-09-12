@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import type { Papel } from "@/tipos/db";
 
 export type Sessao = {
   userId: string;
@@ -53,15 +54,37 @@ export async function exigirEmailConfirmado(): Promise<Sessao> {
   return s;
 }
 
-export async function ehDiretoria(userId: string): Promise<boolean> {
+/** `null` para quem não é da equipe. */
+export async function papelDe(userId: string): Promise<Papel | null> {
   const supabase = await createClient();
-  const { data } = await supabase.from("diretoria").select("user_id").eq("user_id", userId).maybeSingle();
-  return Boolean(data);
+  const { data } = await supabase
+    .from("diretoria")
+    .select("papel")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.papel as Papel) ?? null;
+}
+
+export async function ehDiretoria(userId: string): Promise<boolean> {
+  return (await papelDe(userId)) !== null;
 }
 
 /** Painel da diretoria. Manda para a home quem não é — não confirma que a rota existe. */
-export async function exigirDiretoria(): Promise<Sessao> {
+export async function exigirDiretoria(): Promise<Sessao & { papel: Papel }> {
   const s = await exigirLogin();
-  if (!(await ehDiretoria(s.userId))) redirect("/");
+  const papel = await papelDe(s.userId);
+  if (!papel) redirect("/");
+  return { ...s, papel };
+}
+
+/**
+ * Telas que mexem na estrutura: modalidades, evento, equipe.
+ *
+ * Membro da diretoria valida comprovante e exporta lista, mas não apaga
+ * modalidade com gente inscrita dentro nem muda quem tem acesso.
+ */
+export async function exigirAdmin(): Promise<Sessao & { papel: Papel }> {
+  const s = await exigirDiretoria();
+  if (s.papel !== "admin") redirect("/diretoria");
   return s;
 }

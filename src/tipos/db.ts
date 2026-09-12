@@ -5,6 +5,24 @@ export type StatusInscricao =
   | "recusada"
   | "cancelada";
 
+export type Turno = 'manha' | 'tarde' | 'noite';
+
+export const ROTULO_TURNO: Record<Turno, string> = {
+  manha: 'Manhã',
+  tarde: 'Tarde',
+  noite: 'Noite',
+};
+
+/** Ordem em que os turnos aparecem na tela. */
+export const ORDEM_TURNO: Turno[] = ['manha', 'tarde', 'noite'];
+
+export type Papel = 'admin' | 'membro';
+
+export const ROTULO_PAPEL: Record<Papel, string> = {
+  admin: 'Administrador',
+  membro: 'Diretoria',
+};
+
 export type Evento = {
   id: string;
   slug: string;
@@ -23,6 +41,8 @@ export type Evento = {
   vagas: number | null;
   inscricoes_ate: string | null;
   troca_esporte_ate_dias: number;
+  /** 0 = sem limite de modalidades por turno. */
+  max_esportes_por_turno: number;
   pix_chave: string | null;
   pix_nome: string | null;
   pix_cidade: string | null;
@@ -33,7 +53,7 @@ export type Esporte = {
   id: string;
   evento_id: string;
   nome: string;
-  horario: string;
+  turno: Turno;
   vagas: number;
   por_equipe: boolean;
   ordem: number;
@@ -43,7 +63,7 @@ export type VagaEsporte = {
   esporte_id: string;
   evento_id: string;
   nome: string;
-  horario: string;
+  turno: Turno;
   por_equipe: boolean;
   ordem: number;
   vagas: number;
@@ -109,4 +129,37 @@ export const ROTULO_STATUS: Record<StatusInscricao, string> = {
   confirmada: "Confirmada",
   recusada: "Recusada",
   cancelada: "Cancelada",
+};
+
+/** Números do evento, vindos da view `painel_evento`. */
+export type PainelEvento = {
+  evento_id: string;
+  slug: string;
+  nome: string;
+  data_evento: string;
+  publicado: boolean;
+  valor_centavos: number;
+  inscricoes: number;
+  confirmadas: number;
+  em_analise: number;
+  aguardando: number;
+  recusadas: number;
+  pessoas: number;
+  pessoas_confirmadas: number;
+  igrejas: number;
+  recebido_centavos: number;
+  a_receber_centavos: number;
+};
+
+export type PainelIgreja = {
+  evento_id: string;
+  igreja: string;
+  pessoas: number;
+};
+
+export type MembroDiretoria = {
+  user_id: string;
+  papel: Papel;
+  nome: string;
+  email: string;
 };

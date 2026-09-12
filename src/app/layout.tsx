@@ -7,6 +7,7 @@ import { Cabecalho } from "@/components/Cabecalho";
 import { Rodape } from "@/components/Rodape";
 import { SemConfiguracao } from "@/components/SemConfiguracao";
 import { faltandoConfiguracao } from "@/lib/supabase/config";
+import { Analytics } from "@vercel/analytics/next";
 
 const titulo = Archivo({
   subsets: ["latin"],
@@ -61,6 +62,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Cabecalho sessao={sessao} />
         <main className="flex-1">{children}</main>
         <Rodape />
+        {/*
+          Contagem de acessos da Vercel: sem cookie e sem identificar ninguém,
+          então não precisa de aviso de consentimento. Os números aparecem na
+          aba Analytics do projeto, não dentro do site — construir um painel
+          de tráfego aqui seria refazer o que a hospedagem já dá pronto.
+        */}
+        <Analytics />
       </body>
     </html>
   );

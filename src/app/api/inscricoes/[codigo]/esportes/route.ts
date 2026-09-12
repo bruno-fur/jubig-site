@@ -64,7 +64,7 @@ export async function PATCH(
 
 function traduzir(msg: string) {
   if (/modalidade lotada/i.test(msg)) return { erro: "modalidade_lotada" };
-  if (/conflito de horario/i.test(msg)) return { erro: "conflito_horario" };
+  if (/limite_no_turno/i.test(msg)) return { erro: "limite_no_turno" };
   // A política de insert carrega o prazo de troca: recusa dela = prazo vencido.
   if (/row-level security|violates row-level/i.test(msg)) return { erro: "prazo_encerrado" };
   if (/inscrito_nao_encontrado/i.test(msg)) return { erro: "nao_encontrado" };
@@ -73,7 +73,7 @@ function traduzir(msg: string) {
 }
 
 function statusDoErro(msg: string) {
-  if (/lotada|conflito/i.test(msg)) return 409;
+  if (/lotada|limite_no_turno/i.test(msg)) return 409;
   if (/row-level security|violates row-level/i.test(msg)) return 403;
   if (/inscrito_nao_encontrado/i.test(msg)) return 404;
   return 400;

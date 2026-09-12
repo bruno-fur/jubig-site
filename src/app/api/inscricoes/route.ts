@@ -125,7 +125,7 @@ function traduzirErro(msg: string) {
   if (msg.includes("idade_minima:"))
     return { erro: "idade_minima", inscrito: msg.split("idade_minima:")[1]?.trim() };
   if (msg.includes("modalidade lotada")) return { erro: "modalidade_lotada" };
-  if (msg.includes("conflito de horario")) return { erro: "conflito_horario", mensagem: msg };
+  if (msg.includes("limite_no_turno")) return { erro: "limite_no_turno", mensagem: msg };
   if (msg.includes("inscrito_unico_por_evento")) return { erro: "cpf_ja_inscrito" };
   if (msg.includes("evento_lotado")) return { erro: "evento_lotado" };
   if (msg.includes("inscricoes_encerradas")) return { erro: "inscricoes_encerradas" };
@@ -139,7 +139,7 @@ function traduzirErro(msg: string) {
 
 function statusDoErro(msg: string) {
   if (/row-level security|violates row-level/i.test(msg)) return 403;
-  if (/lotad|inscrito_unico_por_evento/i.test(msg)) return 409;
+  if (/lotad|inscrito_unico_por_evento|limite_no_turno/i.test(msg)) return 409;
   if (msg.includes("evento_nao_encontrado")) return 404;
   return 400;
 }

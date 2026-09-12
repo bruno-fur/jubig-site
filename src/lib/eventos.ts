@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Evento, VagaEsporte } from "@/tipos/db";
+import { ORDEM_TURNO, type Evento, type Turno, type VagaEsporte } from "@/tipos/db";
 
 /** "2026-09-12" no fuso local — comparar data de evento com `new Date()` erra o dia. */
 export function hojeISO(): string {
@@ -30,27 +30,55 @@ export async function eventoPorSlug(slug: string): Promise<Evento | null> {
   return (data as Evento) ?? null;
 }
 
-/** Vaga restante vem da view: conta sem expor quem já está inscrito. */
-export async function esportesDoEvento(eventoId: string): Promise<VagaEsporte[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("vagas_por_esporte")
-    .select("*")
-    .eq("evento_id", eventoId)
-    .order("horario", { ascending: true })
-    .order("ordem", { ascending: true });
-  return (data ?? []) as VagaEsporte[];
+/**
+ * "14h00" do schema antigo vira turno. Some quando `schema.sql` for aplicado
+ * em produção — até lá, é o que mantém o site de pé com a coluna velha.
+ */
+function turnoDe(linha: Record<string, unknown>): Turno {
+  if (typeof linha.turno === "string") return linha.turno as Turno;
+
+  const horario = String(linha.horario ?? "");
+  const hora = Number(horario.match(/^\d{1,2}/)?.[0]);
+  if (Number.isFinite(hora) && hora < 12) return "manha";
+  if (Number.isFinite(hora) && hora >= 18) return "noite";
+  return "tarde";
 }
 
-/** Agrupa por horário: é assim que o formulário mostra e detecta conflito. */
-export function agruparPorHorario(esportes: VagaEsporte[]) {
-  const mapa = new Map<string, VagaEsporte[]>();
+/**
+ * Vaga restante vem da view: conta sem expor quem já está inscrito.
+ *
+ * Ordena em memória, não no banco: `order("turno")` quebraria enquanto a
+ * coluna ainda se chamar `horario`, e derrubar o formulário de inscrição por
+ * causa de ordenação seria troca ruim.
+ */
+export async function esportesDoEvento(eventoId: string): Promise<VagaEsporte[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("vagas_por_esporte").select("*").eq("evento_id", eventoId);
+
+  return ((data ?? []) as Record<string, unknown>[])
+    .map((linha) => ({ ...linha, turno: turnoDe(linha) }) as unknown as VagaEsporte)
+    .sort(
+      (a, b) =>
+        ORDEM_TURNO.indexOf(a.turno) - ORDEM_TURNO.indexOf(b.turno) ||
+        a.ordem - b.ordem ||
+        a.nome.localeCompare(b.nome, "pt-BR")
+    );
+}
+
+/**
+ * Agrupa por turno: é assim que o formulário mostra as modalidades.
+ *
+ * A ordem vem de ORDEM_TURNO, não de ordem alfabética — alfabética colocaria
+ * a manhã depois da noite.
+ */
+export function agruparPorTurno(esportes: VagaEsporte[]): [Turno, VagaEsporte[]][] {
+  const mapa = new Map<Turno, VagaEsporte[]>();
   for (const e of esportes) {
-    const lista = mapa.get(e.horario) ?? [];
+    const lista = mapa.get(e.turno) ?? [];
     lista.push(e);
-    mapa.set(e.horario, lista);
+    mapa.set(e.turno, lista);
   }
-  return [...mapa.entries()].sort(([a], [b]) => a.localeCompare(b, "pt-BR"));
+  return ORDEM_TURNO.filter((t) => mapa.has(t)).map((t) => [t, mapa.get(t)!]);
 }
 
 export function inscricoesAbertas(evento: Evento): boolean {

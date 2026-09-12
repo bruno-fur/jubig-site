@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   eventoPorSlug,
   esportesDoEvento,
-  agruparPorHorario,
+  agruparPorTurno,
   inscricoesAbertas,
   vagasRestantes,
 } from "@/lib/eventos";
@@ -82,9 +82,10 @@ export default async function PaginaInscricao({
           dataEvento: evento.data_evento,
           idadeMinima: evento.idade_minima,
           maxParcelas: evento.max_parcelas,
+          maxEsportesPorTurno: evento.max_esportes_por_turno ?? 0,
           valorCentavos: evento.valor_centavos,
         }}
-        grupos={agruparPorHorario(esportes)}
+        grupos={agruparPorTurno(esportes)}
         vagasRestantes={restantes}
         perfil={{
           nome: perfil?.nome ?? sessao.nome ?? "",

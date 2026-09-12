@@ -5,9 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { AvisoEmailNaoConfirmado } from "@/components/AvisoEmailNaoConfirmado";
 import { SeloStatus } from "@/components/SeloStatus";
 import { TrocaEsporte } from "@/components/TrocaEsporte";
-import { agruparPorHorario, esportesDoEvento, hojeISO } from "@/lib/eventos";
+import { agruparPorTurno, esportesDoEvento, hojeISO } from "@/lib/eventos";
 import { formatarData, formatarReais, cpfMascarado } from "@/lib/validacao";
-import type { Comprovante, Evento, Inscricao, Inscrito, VagaEsporte } from "@/tipos/db";
+import { ROTULO_TURNO, type Comprovante, type Evento, type Inscricao, type Inscrito, type VagaEsporte } from "@/tipos/db";
 
 export const metadata: Metadata = { title: "Minhas inscrições" };
 
@@ -63,7 +63,7 @@ export default async function MinhasInscricoes() {
       <div className="mt-6 space-y-6">
         {inscricoes.map((i) => {
           const esportes = esportesPorEvento.get(i.eventos.id) ?? [];
-          const nomeEsporte = new Map(esportes.map((e) => [e.esporte_id, `${e.nome} (${e.horario})`]));
+          const nomeEsporte = new Map(esportes.map((e) => [e.esporte_id, `${e.nome} (${ROTULO_TURNO[e.turno]})`]));
           const prazoTroca = prazoDeTroca(i.eventos);
           const podeTrocar = hojeISO() <= prazoTroca && i.status !== "cancelada";
           const pagos = i.comprovantes.filter((c) => c.aprovado !== false).length;
@@ -110,10 +110,11 @@ export default async function MinhasInscricoes() {
                         codigo={i.codigo}
                         inscritoId={p.id}
                         nome={p.nome}
-                        grupos={agruparPorHorario(esportes)}
+                        grupos={agruparPorTurno(esportes)}
                         atuais={p.inscritos_esportes.map((e) => e.esporte_id)}
                         deBoa={p.de_boa}
                         prazo={formatarData(prazoTroca)}
+                        maxPorTurno={i.eventos.max_esportes_por_turno ?? 0}
                       />
                     )}
                   </li>

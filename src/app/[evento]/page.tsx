@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { eventoPorSlug, esportesDoEvento, agruparPorHorario, inscricoesAbertas, vagasRestantes } from "@/lib/eventos";
+import { eventoPorSlug, esportesDoEvento, agruparPorTurno, inscricoesAbertas, vagasRestantes } from "@/lib/eventos";
 import { formatarData, formatarReais } from "@/lib/validacao";
 import { Abas } from "@/components/Abas";
 import { Galeria } from "@/components/Galeria";
+import { ROTULO_TURNO } from "@/tipos/db";
 
 export async function generateMetadata({
   params,
@@ -103,9 +104,9 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
               conteudo:
                 esportes.length > 0 ? (
                   <div className="space-y-5">
-                    {agruparPorHorario(esportes).map(([horario, lista]) => (
-                      <div key={horario}>
-                        <p className="mb-2 text-sm font-semibold text-apagado">{horario}</p>
+                    {agruparPorTurno(esportes).map(([turno, lista]) => (
+                      <div key={turno}>
+                        <p className="mb-2 text-sm font-semibold text-apagado">{ROTULO_TURNO[turno]}</p>
                         <ul className="grid gap-2 sm:grid-cols-2">
                           {lista.map((e) => (
                             <li

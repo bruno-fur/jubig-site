@@ -120,8 +120,10 @@ figurinha muda** — senão ele pulsa a cada letra e vira ruído.
       internacional. Máscaras **por tamanho**, nunca regex encadeado —
       `replace` em cadeia quebrou o telefone antes
 - [ ] Múltiplos inscritos na mesma inscrição (caravana da igreja)
-- [ ] Seleção de esportes agrupada por horário, com bloqueio de conflito,
-      vagas por modalidade e a opção "vou só de boa" como escolha obrigatória
+- [x] Seleção de esportes agrupada por TURNO (manhã/tarde/noite), com vagas por
+      modalidade e a opção "vou só de boa" como escolha obrigatória. Mais de uma
+      modalidade por turno é permitido; o limite vem de
+      `eventos.max_esportes_por_turno` (0 = sem limite)
 - [ ] Tela de pagamento: PIX copia e cola, QR, upload do comprovante
 
 ### 3. Painel do usuário
@@ -129,9 +131,16 @@ figurinha muda** — senão ele pulsa a cada letra e vira ruído.
 - [ ] Troca de esporte liberada até X dias antes do evento
 
 ### 4. Painel da diretoria
-- [ ] Lista de comprovantes pendentes com signed URL da imagem
-- [ ] Aprovar / recusar com motivo obrigatório
-- [ ] Exportar CSV por evento e por modalidade
+- [x] Visão geral: inscritos, confirmados, a receber, por igreja, ocupação
+- [x] Lista de comprovantes pendentes com signed URL da imagem
+- [x] Aprovar / recusar com motivo obrigatório
+- [x] Exportar CSV por evento e por modalidade
+- [x] Criar e editar modalidades (só admin)
+- [x] Gerenciar quem tem acesso e com qual nível (só admin)
+
+**Três níveis:** `admin` mexe na estrutura (modalidades, evento, equipe),
+`membro` faz o dia a dia (validar comprovante, exportar), usuário comum não
+enxerga nada da diretoria. O banco garante que sempre sobre ao menos um admin.
 
 ### 5. Site público
 - [ ] Home: hero do próximo evento, quem somos, próximos eventos, galeria,
