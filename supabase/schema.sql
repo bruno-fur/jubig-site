@@ -299,7 +299,12 @@ with (security_invoker = false) as
          count(ie.inscrito_id)::int as ocupadas,
          greatest(e.vagas - count(ie.inscrito_id), 0)::int as restantes
     from esportes e
+    join eventos ev on ev.id = e.evento_id
     left join inscritos_esportes ie on ie.esporte_id = e.id
+   -- A view roda como dona, então não passa pela RLS da tabela esportes.
+   -- Sem este filtro, a modalidade de um evento ainda não publicado
+   -- apareceria para qualquer visitante anônimo.
+   where ev.publicado or eh_diretoria()
    group by e.id;
 
 grant select on vagas_por_esporte to anon, authenticated;
@@ -316,6 +321,7 @@ with (security_invoker = false) as
     from eventos e
     left join inscritos i on i.evento_id = e.id
     left join inscricoes ins on ins.id = i.inscricao_id
+   where e.publicado or eh_diretoria()
    group by e.id;
 
 grant select on vagas_por_evento to anon, authenticated;
