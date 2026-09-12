@@ -105,5 +105,3 @@ function Bolha({
     </div>
   );
 }
-
-export { FIGURINHA };
