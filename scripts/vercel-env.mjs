@@ -63,10 +63,35 @@ if (faltando.length) {
   process.exit(1);
 }
 
+/*
+ * Duas formas de autenticar, porque `vercel login` abre o navegador e nem todo
+ * terminal consegue fazer isso:
+ *   - sessão do CLI, de um `vercel login` feito antes
+ *   - VERCEL_TOKEN no ambiente (vercel.com/account/tokens)
+ *
+ * Com token não é preciso `vercel link`: `--project` resolve o destino.
+ */
+const token = process.env.VERCEL_TOKEN?.trim() || opcao("token");
+const projeto = opcao("projeto") ?? "jubig-site";
+const escopo = opcao("escopo");
+
+const autenticacao = [
+  ...(token ? ["--token", token] : []),
+  ...(escopo ? ["--scope", escopo] : []),
+];
+
 if (!ensaio) {
-  const quem = spawnSync("npx", ["vercel", "whoami"], { encoding: "utf8", shell: true });
+  const quem = spawnSync("npx", ["vercel", "whoami", ...autenticacao], {
+    encoding: "utf8",
+    shell: true,
+  });
   if (quem.status !== 0) {
-    console.error("O CLI da Vercel não está autenticado. Rode `vercel login` num terminal normal.");
+    console.error(
+      "O CLI da Vercel não está autenticado. Escolha um:\n" +
+        "  vercel login                       (num terminal normal, abre o navegador)\n" +
+        "  VERCEL_TOKEN=... npm run vercel:env -- --site https://...\n" +
+        "    (token em vercel.com/account/tokens)"
+    );
     process.exit(1);
   }
   console.log(`Autenticado como ${quem.stdout.trim().split("\n").pop()}\n`);
@@ -84,6 +109,8 @@ for (const nome of NOMES) {
       "vercel", "env", "add", nome, alvo,
       "--value", valores[nome],
       "--no-sensitive", "--force", "--yes",
+      "--project", projeto,
+      ...autenticacao,
     ];
 
     if (ensaio) {
