@@ -20,10 +20,8 @@ export function AvisoEmailNaoConfirmado({ email, variante = "topo" }: Props) {
 
   async function reenviar() {
     setEstado("enviando");
-    const r = await fetch("/api/auth/reenviar-confirmacao", {
+    const r = await fetch("/api/auth/enviar-confirmacao", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email }),
     });
     setEstado(r.ok ? "enviado" : r.status === 429 ? "limite" : "erro");
   }

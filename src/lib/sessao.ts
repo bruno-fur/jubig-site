@@ -14,11 +14,25 @@ export async function pegarSessao(): Promise<Sessao | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  /*
+   * A confirmação é nossa, não do Supabase: `auth.users.email_confirmed_at`
+   * fica preenchido no cadastro (o "Confirm email" do painel está desligado de
+   * propósito) e não diz nada. Quem manda é `perfis.email_confirmado_em`, o
+   * mesmo campo que a política de RLS consulta — as duas camadas olham para o
+   * mesmo lugar.
+   */
+  const { data: perfil } = await supabase
+    .from("perfis")
+    .select("nome, email_confirmado_em")
+    .eq("id", user.id)
+    .maybeSingle();
+
   return {
     userId: user.id,
     email: user.email!,
-    emailConfirmado: Boolean(user.email_confirmed_at),
-    nome: (user.user_metadata?.nome as string) ?? null,
+    emailConfirmado: Boolean(perfil?.email_confirmado_em),
+    nome: perfil?.nome || (user.user_metadata?.nome as string) || null,
   };
 }
 
@@ -45,7 +59,7 @@ export async function ehDiretoria(userId: string): Promise<boolean> {
   return Boolean(data);
 }
 
-/** Painel da diretoria. Devolve 404 para quem não é — não confirma que a rota existe. */
+/** Painel da diretoria. Manda para a home quem não é — não confirma que a rota existe. */
 export async function exigirDiretoria(): Promise<Sessao> {
   const s = await exigirLogin();
   if (!(await ehDiretoria(s.userId))) redirect("/");

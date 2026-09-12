@@ -48,11 +48,16 @@ export async function atualizarSessao(req: NextRequest) {
 
   const caminho = req.nextUrl.pathname;
   /*
-   * `/confirmar-email` fica de fora: o Supabase recusa o login de quem não
-   * confirmou, então quem mais precisa daquela tela é quem ainda não tem sessão.
+   * `/confirmar-email` entrou na lista: com a confirmação própria, quem não
+   * confirmou entra normalmente no site — e é justamente por isso que a tela
+   * de reenvio só faz sentido com sessão.
+   *
+   * `/confirmar/<token>` fica de fora: o link do e-mail costuma ser aberto no
+   * celular, que não é onde a conta foi criada.
    */
   const exigeLogin =
     caminho.startsWith("/minhas-inscricoes") ||
+    caminho.startsWith("/confirmar-email") ||
     caminho.startsWith("/diretoria") ||
     caminho.startsWith("/inscricoes/") ||
     /^\/[^/]+\/inscricao/.test(caminho);

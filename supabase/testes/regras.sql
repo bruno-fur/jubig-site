@@ -20,6 +20,14 @@ insert into auth.users (id, email, email_confirmed_at) values
   ('33333333-3333-3333-3333-333333333333', 'outro@teste.com', now()),
   ('44444444-4444-4444-4444-444444444444', 'diretor@teste.com', now());
 
+-- A confirmacao e nossa: quem confirmou tem perfis.email_confirmado_em.
+-- O trigger ao_criar_usuario ja criou a linha em perfis.
+update perfis set email_confirmado_em = now() where id in (
+  '11111111-1111-1111-1111-111111111111',
+  '33333333-3333-3333-3333-333333333333',
+  '44444444-4444-4444-4444-444444444444'
+);
+
 insert into diretoria (user_id, papel) values
   ('44444444-4444-4444-4444-444444444444', 'admin');
 
@@ -288,6 +296,71 @@ begin
     raise exception 'FALHOU bucket — fotos devia ser publico';
   end if;
   raise notice 'ok    bucket fotos publico';
+end $$;
+
+-- ============================================================
+-- Confirmacao de e-mail propria
+-- ============================================================
+set role postgres;
+
+do $$
+declare v_token uuid; v_r text; v_usuario uuid := '22222222-2222-2222-2222-222222222222';
+begin
+  -- o pendente ainda nao confirmou
+  if (select email_confirmado_em from perfis where id = v_usuario) is not null then
+    raise exception 'FALHOU — pendente ja aparece confirmado';
+  end if;
+
+  insert into confirmacoes_email (user_id) values (v_usuario) returning token into v_token;
+
+  v_r := confirmar_email(v_token);
+  if v_r <> 'ok' then raise exception 'FALHOU confirmacao — veio %', v_r; end if;
+  raise notice 'ok    token valido confirma a conta';
+
+  if (select email_confirmado_em from perfis where id = v_usuario) is null then
+    raise exception 'FALHOU — confirmou mas nao gravou em perfis';
+  end if;
+  raise notice 'ok    perfis.email_confirmado_em preenchido';
+
+  -- o mesmo token nao serve duas vezes
+  v_r := confirmar_email(v_token);
+  if v_r <> 'ja_usado' then raise exception 'FALHOU reuso — veio %', v_r; end if;
+  raise notice 'ok    token nao serve duas vezes';
+
+  -- token que nunca existiu
+  v_r := confirmar_email(gen_random_uuid());
+  if v_r <> 'invalido' then raise exception 'FALHOU token inexistente — veio %', v_r; end if;
+  raise notice 'ok    token inexistente recusado';
+
+  -- token vencido
+  insert into confirmacoes_email (user_id, expira_em)
+  values (v_usuario, now() - interval '1 hour') returning token into v_token;
+  v_r := confirmar_email(v_token);
+  if v_r <> 'expirado' then raise exception 'FALHOU token vencido — veio %', v_r; end if;
+  raise notice 'ok    token vencido recusado';
+end $$;
+
+-- Agora que confirmou, o mesmo usuario consegue se inscrever.
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$
+begin
+  perform criar_inscricao('jubigday-2026', 1,
+    '[{"nome":"Depois De Confirmar","cpf":"15350946056","nascimento":"2000-01-01","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb);
+  raise notice 'ok    confirmado passa a conseguir se inscrever';
+end $$;
+
+-- A tabela de tokens nao e visivel para ninguem pela chave anonima.
+do $$
+begin
+  perform espera_erro('select count(*) from confirmacoes_email',
+    'permission denied', 'tabela de tokens fechada para o usuario comum');
+exception when others then
+  if (select count(*) from confirmacoes_email) = 0 then
+    raise notice 'ok    tabela de tokens nao devolve nada para o usuario comum';
+  else
+    raise exception 'FALHOU — usuario comum enxerga token de confirmacao';
+  end if;
 end $$;
 
 select 'TODOS OS TESTES PASSARAM' as resultado;

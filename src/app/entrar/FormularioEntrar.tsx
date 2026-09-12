@@ -32,15 +32,6 @@ function Miolo({ proximo }: { proximo: string }) {
     setEnviando(false);
 
     if (error) {
-      /*
-       * Este é o momento em que a pessoa descobre a pendência: no login,
-       * nunca no fim do formulário de inscrição. Manda direto para a tela que
-       * explica e reenvia o link.
-       */
-      if (/email not confirmed|not confirmed/i.test(error.message)) {
-        router.push(`/confirmar-email?email=${encodeURIComponent(email.trim())}`);
-        return;
-      }
       setErro(
         /invalid login/i.test(error.message)
           ? "E-mail ou senha não conferem."

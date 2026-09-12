@@ -1,43 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { pegarSessao } from "@/lib/sessao";
+import { exigirLogin } from "@/lib/sessao";
 import { AvisoEmailNaoConfirmado } from "@/components/AvisoEmailNaoConfirmado";
 
 export const metadata: Metadata = { title: "Confirme seu e-mail" };
 
 /**
- * Página pública de propósito: o Supabase barra o login de quem não confirmou,
- * então quem mais precisa desta tela é justamente quem ainda não tem sessão.
- * O e-mail vem da sessão quando existe; senão, da querystring.
+ * Tela de bloqueio: é para onde `exigirEmailConfirmado()` manda quem tenta
+ * abrir uma inscrição sem ter confirmado. Camada 2 das quatro.
+ *
+ * Exige login porque o reenvio precisa saber de quem é a conta — e, com a
+ * confirmação própria, quem não confirmou consegue entrar normalmente.
  */
-export default async function ConfirmarEmail({
-  searchParams,
-}: {
-  searchParams: Promise<{ email?: string; erro?: string }>;
-}) {
-  const { email: emailParam, erro } = await searchParams;
-  const sessao = await pegarSessao();
-
-  if (sessao?.emailConfirmado) redirect("/minhas-inscricoes");
-
-  const email = sessao?.email ?? emailParam;
-  if (!email) redirect("/entrar");
+export default async function ConfirmarEmail() {
+  const sessao = await exigirLogin();
+  if (sessao.emailConfirmado) redirect("/minhas-inscricoes");
 
   return (
     <div className="mx-auto max-w-xl px-4 py-12">
-      {erro === "link" && (
-        <p className="mb-5 rounded-[10px] bg-ruim/10 px-4 py-3 text-sm font-medium text-ruim">
-          Esse link já foi usado ou venceu. Peça um novo abaixo.
-        </p>
-      )}
-
-      <AvisoEmailNaoConfirmado email={email} variante="bloqueio" />
+      <AvisoEmailNaoConfirmado email={sessao.email} variante="bloqueio" />
 
       <p className="mt-6 text-center text-sm text-apagado">
-        Já confirmou?{" "}
-        <Link href="/entrar" className="font-semibold text-laranja-escuro hover:underline">
-          Entrar
+        Confirmou em outra aba?{" "}
+        <Link href="/minhas-inscricoes" className="font-semibold text-laranja-escuro hover:underline">
+          Recarregar
         </Link>
       </p>
     </div>

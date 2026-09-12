@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { CountryCode } from "libphonenumber-js";
 import { criarClienteNavegador } from "@/lib/supabase/client";
@@ -9,8 +10,6 @@ import { CampoTelefone } from "@/components/CampoTelefone";
 import { ProvedorJuca } from "@/components/juca/contexto";
 import { JucaCanto } from "@/components/juca/Ancora";
 import { nomeCompleto } from "@/lib/validacao";
-
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
 export function FormularioCriarConta() {
   return (
@@ -21,6 +20,7 @@ export function FormularioCriarConta() {
 }
 
 function Miolo() {
+  const router = useRouter();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [igreja, setIgreja] = useState("");
@@ -33,6 +33,7 @@ function Miolo() {
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [pronto, setPronto] = useState(false);
+  const [falhouEnvio, setFalhouEnvio] = useState(false);
 
   function conferir() {
     const e: Record<string, string> = {};
@@ -58,12 +59,11 @@ function Miolo() {
       options: {
         // Vai para o perfil pelo trigger `ao_criar_usuario` do schema.
         data: { nome: nome.trim(), telefone: e164 ?? null, igreja: igreja.trim() },
-        emailRedirectTo: `${SITE || window.location.origin}/auth/callback?proximo=/confirmado`,
       },
     });
-    setEnviando(false);
 
     if (error) {
+      setEnviando(false);
       setErroGeral(
         /already registered|already exists/i.test(error.message)
           ? "Esse e-mail já tem conta. Tente entrar."
@@ -71,21 +71,51 @@ function Miolo() {
       );
       return;
     }
+
+    /*
+     * O "Confirm email" do Supabase está desligado, então o cadastro já
+     * devolve sessão: a pessoa entra logada e o e-mail de confirmação sai
+     * pelo nosso SMTP, com o nosso template.
+     */
+    const envio = await fetch("/api/auth/enviar-confirmacao", { method: "POST" });
+    setEnviando(false);
+    setFalhouEnvio(!envio.ok);
     setPronto(true);
+
+    // refresh() para o layout reler a sessão e a faixa de aviso aparecer.
+    router.refresh();
   }
 
   if (pronto) {
     return (
       <div className="cartao mt-8 p-7 text-center">
-        <img src="/juca/heh.webp" alt="" className="mx-auto mb-4 w-28" />
-        <h2 className="titulo text-2xl">Falta um clique</h2>
+        <img
+          src={falhouEnvio ? "/juca/nervoso.webp" : "/juca/heh.webp"}
+          alt=""
+          className="mx-auto mb-4 w-28"
+        />
+        <h2 className="titulo text-2xl">
+          {falhouEnvio ? "Conta criada, mas o e-mail não saiu" : "Falta um clique"}
+        </h2>
         <p className="mx-auto mt-2 max-w-sm text-apagado">
-          Enviamos um link de confirmação para <strong>{email.trim().toLowerCase()}</strong>.
-          Enquanto você não clicar nele, <strong>não dá para se inscrever em nenhum evento</strong>.
+          {falhouEnvio ? (
+            <>
+              Sua conta está criada e você já está logado, mas não conseguimos enviar o link de
+              confirmação agora. Tente de novo pelo botão abaixo.
+            </>
+          ) : (
+            <>
+              Enviamos um link de confirmação para <strong>{email.trim().toLowerCase()}</strong>.
+              Enquanto você não clicar nele,{" "}
+              <strong>não dá para se inscrever em nenhum evento</strong>.
+            </>
+          )}
         </p>
-        <p className="mt-4 text-sm text-apagado">Não chegou? Confira o spam ou a aba Promoções.</p>
-        <Link href={`/confirmar-email?email=${encodeURIComponent(email.trim())}`} className="botao-secundario mt-5">
-          Reenviar o link
+        {!falhouEnvio && (
+          <p className="mt-4 text-sm text-apagado">Não chegou? Confira o spam ou a aba Promoções.</p>
+        )}
+        <Link href="/confirmar-email" className="botao-secundario mt-5">
+          {falhouEnvio ? "Tentar de novo" : "Reenviar o link"}
         </Link>
       </div>
     );

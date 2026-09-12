@@ -73,50 +73,27 @@ Em **Authentication → URL Configuration**:
 
 ### 4. E-mail
 
-Tudo sai de `jubig.ofc@gmail.com`, pelo SMTP do Gmail. São dois caminhos
-diferentes, com a mesma conta nos dois:
+Tudo sai de `jubig.ofc@gmail.com`, pelo SMTP do Gmail, com os templates de
+`src/emails/templates.ts`. **O Supabase não envia e-mail nenhum.**
 
-| E-mail | Quem dispara | Onde fica o template |
-|---|---|---|
-| Confirmação de endereço | Supabase | painel do Supabase |
-| Inscrição, comprovante, aprovação, recusa | nosso código | `src/emails/templates.ts` |
+Em **Authentication → Sign In / Providers → Email**, deixe
+**Confirm email DESLIGADO**. A confirmação dele barra o login de quem não
+confirmou — e aí a faixa de aviso, que deveria aparecer em toda página logada
+desde o primeiro login, nunca chega a aparecer. A confirmação é nossa:
+`perfis.email_confirmado_em`, preenchido pelo link que mandamos.
 
 **Senha de app.** A senha normal do Gmail não serve para SMTP. Na conta
 Google: Segurança → ative a verificação em duas etapas (obrigatória) →
 Senhas de app → gere uma. São 16 letras; pode colar com ou sem os espaços.
 
-**Custom SMTP** (Authentication → Emails → SMTP Settings). Sem isso o Supabase
-usa o SMTP compartilhado dele, que entrega poucos e-mails por hora e cai em
-spam:
-
-```
-Host: smtp.gmail.com     Porta: 465
-Usuário: jubig.ofc@gmail.com
-Senha:   a senha de app
-Sender:  jubig.ofc@gmail.com    (tem que ser a MESMA conta)
-```
-
-Na mesma tela, suba o **rate limit** do Supabase — o padrão é baixo demais
-para um dia de abertura de inscrições.
-
-Por que Gmail e não Resend: o Resend só envia de domínio verificado por SPF e
-DKIM, e ninguém publica DNS no `gmail.com`. No dia em que a JUBIG tiver
-domínio próprio, vale voltar para um serviço de envio — a troca é só
-`src/lib/email.ts`, que é o único arquivo que conhece o provedor.
-
-Depois, em **Authentication → Emails → Confirm signup**, cole o HTML gerado por:
+Teste antes de abrir as inscrições:
 
 ```bash
-npm run email:confirmacao -- https://SEU-DOMINIO
+npm run testar:email -- voce@exemplo.com
 ```
 
-A URL é obrigatória porque entra no `src` da figurinha do Juca dentro do
-e-mail. O script recusa localhost de propósito: esse HTML só vai para o painel
-do Supabase, que dispara e-mail de verdade, e imagem quebrada na caixa de
-entrada não tem conserto depois do envio.
-
-Sem colar isso, o e-mail de confirmação sai com o texto padrão do Supabase —
-sem o Juca e sem o tom do resto do site.
+Mande também para um Outlook e um Hotmail: remetente @gmail.com cai em spam
+com mais facilidade que domínio próprio, e é melhor descobrir agora.
 
 ### 5. Variáveis de ambiente
 
@@ -169,12 +146,24 @@ independentes — se uma falhar, as outras seguram:
 | API | `api/inscricoes`, `api/comprovantes` | 403 mesmo chamando a API direto |
 | Banco | política `criar inscricao com email confirmado` | Postgres recusa o insert |
 
-A quarta camada usa a função `email_confirmado()`, em `security definer` —
-sem isso a política não conseguiria ler `auth.users` e passaria batido.
+As quatro olham para o mesmo campo: `perfis.email_confirmado_em`.
 
-Como o Supabase barra o login de quem não confirmou, a pessoa descobre a
-pendência **no login**: `/entrar` reconhece o erro e manda para
-`/confirmar-email`, que é pública de propósito e tem o botão de reenvio.
+A quarta camada usa a função `email_confirmado()`, em `security definer`.
+
+A pessoa entra normalmente sem ter confirmado — é o que faz a faixa de aviso
+aparecer **desde o primeiro login**, em vez de a pendência só aparecer no fim
+do formulário. O que ela não consegue é se inscrever.
+
+O fluxo:
+
+1. `/criar-conta` cadastra e já devolve sessão
+2. `POST /api/auth/enviar-confirmacao` grava um token e manda o e-mail
+3. `/confirmar/<token>` consome o token e preenche `email_confirmado_em`
+
+O token vale 24 horas, serve uma vez só, e é aceito um envio por minuto por
+pessoa. A tabela `confirmacoes_email` tem RLS ligada e nenhuma política: só o
+service role a alcança, porque um token nas mãos erradas confirma a conta de
+outra pessoa.
 
 ---
 

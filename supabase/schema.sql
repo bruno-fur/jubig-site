@@ -29,8 +29,14 @@ create table if not exists perfis (
   nome text not null default '',
   telefone text,                       -- sempre em E.164: +5545999990000
   igreja text,
+  -- Preenchido pela nossa confirmação, não pela do Supabase.
+  -- Ver "Confirmação de e-mail própria" no fim do arquivo.
+  email_confirmado_em timestamptz,
   criado_em timestamptz default now()
 );
+
+-- Para bancos criados antes desta coluna existir.
+alter table perfis add column if not exists email_confirmado_em timestamptz;
 
 create table if not exists eventos (
   id uuid primary key default gen_random_uuid(),
@@ -151,12 +157,18 @@ language sql stable security definer set search_path = public as $fn$
   select exists (select 1 from diretoria where user_id = auth.uid())
 $fn$;
 
--- Esta é a camada 4 da regra do e-mail confirmado.
+/*
+ * Camada 4 da regra do e-mail confirmado.
+ *
+ * Olha `perfis.email_confirmado_em`, não `auth.users.email_confirmed_at`: a
+ * confirmação é nossa, não do Supabase. Ver o bloco "Confirmação de e-mail
+ * própria" no fim deste arquivo.
+ */
 create or replace function email_confirmado() returns boolean
-language sql stable security definer set search_path = public, auth as $fn$
+language sql stable security definer set search_path = public as $fn$
   select exists (
-    select 1 from auth.users u
-    where u.id = auth.uid() and u.email_confirmed_at is not null
+    select 1 from perfis p
+    where p.id = auth.uid() and p.email_confirmado_em is not null
   )
 $fn$;
 
@@ -678,3 +690,62 @@ create policy "duvidas publicas" on duvidas for select using (true);
 drop policy if exists "diretoria edita duvidas" on duvidas;
 create policy "diretoria edita duvidas" on duvidas
   for all using (eh_diretoria()) with check (eh_diretoria());
+
+-- ============================================================
+-- Confirmação de e-mail própria.
+--
+-- O Supabase fica com "Confirm email" DESLIGADO. A confirmação dele barra o
+-- login de quem não confirmou — e aí a faixa de aviso, que deveria aparecer
+-- em toda página logada desde o primeiro login, nunca chega a aparecer. Com a
+-- confirmação nossa, a pessoa entra, usa o site e só não consegue se
+-- inscrever, que é a regra do projeto.
+--
+-- Some junto a dependência do SMTP e do template do painel do Supabase: o
+-- e-mail sai pelo mesmo caminho dos outros quatro, com o mesmo Juca.
+-- ============================================================
+
+create table if not exists confirmacoes_email (
+  token uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  criado_em timestamptz not null default now(),
+  expira_em timestamptz not null default now() + interval '24 hours',
+  usado_em timestamptz
+);
+create index if not exists confirmacoes_usuario on confirmacoes_email (user_id, criado_em desc);
+
+-- RLS ligada e sem política nenhuma: ninguém lê nem escreve com a chave
+-- anônima. Só o service role, pelas rotas do servidor, toca nesta tabela —
+-- quem alcançasse um token de outra pessoa confirmaria a conta dela.
+alter table confirmacoes_email enable row level security;
+
+/*
+ * Consome o token e confirma. Em uma transação só, porque duas abas abrindo o
+ * mesmo link ao mesmo tempo poderiam usar o token duas vezes.
+ *
+ * Devolve o motivo em vez de estourar: a tela precisa saber diferenciar link
+ * vencido de link já usado — no segundo caso a conta já está confirmada e não
+ * há nada de errado a dizer para a pessoa.
+ */
+create or replace function confirmar_email(p_token uuid) returns text
+language plpgsql security definer set search_path = public as $fn$
+declare v_usuario uuid; v_expira timestamptz; v_usado timestamptz;
+begin
+  select user_id, expira_em, usado_em into v_usuario, v_expira, v_usado
+    from confirmacoes_email where token = p_token for update;
+
+  if v_usuario is null then return 'invalido'; end if;
+  if v_usado is not null then return 'ja_usado'; end if;
+  if v_expira < now() then return 'expirado'; end if;
+
+  update confirmacoes_email set usado_em = now() where token = p_token;
+  update perfis set email_confirmado_em = coalesce(email_confirmado_em, now())
+   where id = v_usuario;
+
+  -- Os tokens antigos da mesma pessoa perdem a validade junto.
+  update confirmacoes_email set usado_em = now()
+   where user_id = v_usuario and usado_em is null;
+
+  return 'ok';
+end $fn$;
+
+revoke all on function confirmar_email(uuid) from public, anon, authenticated;
