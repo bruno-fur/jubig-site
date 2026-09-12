@@ -68,12 +68,39 @@ create table if not exists esportes (
   id uuid primary key default gen_random_uuid(),
   evento_id uuid not null references eventos on delete cascade,
   nome text not null,
-  horario text not null,               -- '14h00' — agrupa e detecta conflito
+  turno text not null,                 -- 'manha' | 'tarde' | 'noite'
   vagas int not null,
   por_equipe boolean not null default false,
   ordem int not null default 0
 );
 create index if not exists esportes_evento on esportes (evento_id);
+
+/*
+ * Era `horario` com texto livre ('14h00'). Virou turno porque é assim que a
+ * diretoria monta o dia — e porque horário exato muda até a véspera, enquanto
+ * turno não.
+ *
+ * O de-para roda uma vez em banco já existente; em banco novo não faz nada.
+ * Hora abaixo de 12 vira manhã; o resto, tarde.
+ */
+do $mig$ begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'esportes' and column_name = 'horario'
+  ) then
+    alter table esportes rename column horario to turno;
+
+    update esportes set turno = case
+      when turno in ('manha', 'tarde', 'noite') then turno
+      when turno ~ '^[0-9]{1,2}' and (substring(turno from '^[0-9]{1,2}'))::int < 12 then 'manha'
+      else 'tarde'
+    end;
+  end if;
+end $mig$;
+
+alter table esportes drop constraint if exists esportes_turno_valido;
+alter table esportes add constraint esportes_turno_valido
+  check (turno in ('manha', 'tarde', 'noite'));
 
 create table if not exists inscricoes (
   id uuid primary key default gen_random_uuid(),
@@ -255,14 +282,28 @@ create trigger inscricoes_parcelas
   before insert or update of parcelas on inscricoes
   for each row execute function conferir_parcelas();
 
--- vaga de modalidade e conflito de horário: o formulário avisa, o banco decide
+-- ============================================================
+-- Vaga, e quantas modalidades a pessoa pode pegar no mesmo turno.
+--
+-- Duas modalidades no mesmo turno eram recusadas como conflito. Agora o
+-- limite é configurável por evento: 0 é sem limite, 1 recria o comportamento
+-- antigo. O JubigDay e o Congresso não têm o mesmo formato de dia.
+--
+-- O formulário avisa, o banco decide: a tela pode estar com a contagem de
+-- vagas velha, e duas caravanas preenchendo ao mesmo tempo veem a mesma.
+-- ============================================================
+-- 0 é sem limite; 1 volta ao comportamento antigo, uma modalidade por turno.
+alter table eventos add column if not exists max_esportes_por_turno int not null default 0;
+
 create or replace function conferir_esporte() returns trigger
 language plpgsql security definer set search_path = public as $fn$
-declare v_vagas int; v_ocupadas int; v_horario text; v_evento uuid; v_conflito text;
+declare
+  v_vagas int; v_ocupadas int; v_turno text; v_evento uuid;
+  v_limite int; v_no_turno int;
 begin
   -- for update segura a linha até o commit: duas caravanas ao mesmo tempo
   -- não conseguem ocupar a mesma última vaga.
-  select vagas, horario, evento_id into v_vagas, v_horario, v_evento
+  select vagas, turno, evento_id into v_vagas, v_turno, v_evento
     from esportes where id = new.esporte_id
     for update;
 
@@ -274,15 +315,19 @@ begin
     raise exception 'modalidade nao pertence ao evento da inscricao';
   end if;
 
-  select e.nome into v_conflito
-    from inscritos_esportes ie
-    join esportes e on e.id = ie.esporte_id
-   where ie.inscrito_id = new.inscrito_id
-     and e.horario = v_horario
-     and e.id <> new.esporte_id
-   limit 1;
-  if v_conflito is not null then
-    raise exception 'conflito de horario com %', v_conflito;
+  select max_esportes_por_turno into v_limite from eventos where id = v_evento;
+
+  if coalesce(v_limite, 0) > 0 then
+    select count(*) into v_no_turno
+      from inscritos_esportes ie
+      join esportes e on e.id = ie.esporte_id
+     where ie.inscrito_id = new.inscrito_id
+       and e.turno = v_turno
+       and e.id <> new.esporte_id;
+
+    if v_no_turno >= v_limite then
+      raise exception 'limite_no_turno:%', v_limite;
+    end if;
   end if;
 
   select count(*) into v_ocupadas from inscritos_esportes where esporte_id = new.esporte_id;
@@ -306,7 +351,7 @@ create trigger inscritos_esportes_regras
 drop view if exists vagas_por_esporte;
 create view vagas_por_esporte
 with (security_invoker = false) as
-  select e.id as esporte_id, e.evento_id, e.nome, e.horario, e.por_equipe, e.ordem,
+  select e.id as esporte_id, e.evento_id, e.nome, e.turno, e.por_equipe, e.ordem,
          e.vagas,
          count(ie.inscrito_id)::int as ocupadas,
          greatest(e.vagas - count(ie.inscrito_id), 0)::int as restantes
@@ -749,3 +794,111 @@ begin
 end $fn$;
 
 revoke all on function confirmar_email(uuid) from public, anon, authenticated;
+
+-- ============================================================
+-- Níveis de acesso
+--
+-- Três papéis, não dois:
+--   admin   — mexe na estrutura: modalidades, evento, e quem entra na equipe
+--   membro  — o trabalho do dia a dia: validar comprovante e exportar lista
+--   demais  — usuário comum, não enxerga nada da diretoria
+--
+-- A separação existe porque validar comprovante é tarefa de várias pessoas,
+-- mas apagar uma modalidade com gente inscrita dentro não pode ser.
+-- ============================================================
+
+alter table diretoria drop constraint if exists diretoria_papel_valido;
+alter table diretoria add constraint diretoria_papel_valido
+  check (papel in ('admin', 'membro'));
+
+create or replace function eh_admin() returns boolean
+language sql stable security definer set search_path = public as $fn$
+  select exists (select 1 from diretoria where user_id = auth.uid() and papel = 'admin')
+$fn$;
+
+/*
+ * Impede ficar sem nenhum admin.
+ *
+ * Sem isto, o último admin se rebaixa por engano e ninguém mais consegue
+ * mexer na equipe nem nas modalidades — só com acesso direto ao banco.
+ */
+create or replace function proteger_ultimo_admin() returns trigger
+language plpgsql security definer set search_path = public as $fn$
+declare v_restantes int;
+begin
+  select count(*) into v_restantes from diretoria
+   where papel = 'admin' and user_id <> coalesce(old.user_id, new.user_id);
+
+  if v_restantes = 0 and (tg_op = 'DELETE' or new.papel <> 'admin') then
+    raise exception 'ultimo_admin';
+  end if;
+  return coalesce(new, old);
+end $fn$;
+
+drop trigger if exists diretoria_ultimo_admin on diretoria;
+create trigger diretoria_ultimo_admin
+  before update or delete on diretoria
+  for each row when (old.papel = 'admin')
+  execute function proteger_ultimo_admin();
+
+-- Só admin mexe em quem é da equipe.
+drop policy if exists "admin gerencia diretoria" on diretoria;
+create policy "admin gerencia diretoria" on diretoria
+  for all using (eh_admin()) with check (eh_admin());
+
+-- Só admin cria e apaga modalidade; a diretoria inteira apenas lê.
+drop policy if exists "admin gerencia esportes" on esportes;
+create policy "admin gerencia esportes" on esportes
+  for all using (eh_admin()) with check (eh_admin());
+
+drop policy if exists "admin edita evento" on eventos;
+create policy "admin edita evento" on eventos
+  for update using (eh_admin()) with check (eh_admin());
+
+-- ============================================================
+-- Painel: números do evento sem expor quem se inscreveu.
+--
+-- View como dona, igual às de vaga: a diretoria enxerga tudo pela RLS, mas
+-- contar aqui evita puxar a lista inteira de inscritos só para somar.
+-- ============================================================
+drop view if exists painel_evento;
+create view painel_evento
+with (security_invoker = false) as
+  select
+    e.id as evento_id,
+    e.slug,
+    e.nome,
+    e.data_evento,
+    e.publicado,
+    e.valor_centavos,
+    count(distinct i.id) filter (where i.status <> 'cancelada')                  as inscricoes,
+    count(distinct i.id) filter (where i.status = 'confirmada')                  as confirmadas,
+    count(distinct i.id) filter (where i.status = 'em_analise')                  as em_analise,
+    count(distinct i.id) filter (where i.status = 'aguardando_pagamento')        as aguardando,
+    count(distinct i.id) filter (where i.status = 'recusada')                    as recusadas,
+    count(distinct ins.id) filter (where i.status <> 'cancelada')                as pessoas,
+    count(distinct ins.id) filter (where i.status = 'confirmada')                as pessoas_confirmadas,
+    count(distinct ins.igreja) filter (where i.status <> 'cancelada')            as igrejas,
+    coalesce(sum(i.valor_centavos) filter (where i.status = 'confirmada'), 0)    as recebido_centavos,
+    coalesce(sum(i.valor_centavos) filter (
+      where i.status in ('aguardando_pagamento', 'em_analise')), 0)              as a_receber_centavos
+  from eventos e
+  left join inscricoes i on i.evento_id = e.id
+  left join inscritos ins on ins.inscricao_id = i.id
+  group by e.id;
+
+revoke all on painel_evento from anon, authenticated;
+grant select on painel_evento to authenticated;
+
+-- Quantas pessoas por igreja, para a diretoria saber de onde vem a caravana.
+drop view if exists painel_igrejas;
+create view painel_igrejas
+with (security_invoker = false) as
+  select i.evento_id, ins.igreja, count(*)::int as pessoas
+    from inscritos ins
+    join inscricoes i on i.id = ins.inscricao_id
+   where i.status <> 'cancelada'
+   group by i.evento_id, ins.igreja;
+
+revoke all on painel_igrejas from anon, authenticated;
+grant select on painel_igrejas to authenticated;

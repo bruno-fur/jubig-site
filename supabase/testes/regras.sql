@@ -126,21 +126,45 @@ select espera_erro($x$
 $x$, 'parcelas fora do permitido', 'parcelas acima de max_parcelas recusado');
 
 -- ============================================================
--- Conflito de horário: duas modalidades no mesmo horário
+-- Mais de uma modalidade no mesmo turno
 -- ============================================================
+do $$
+declare v_a uuid; v_b uuid; v_codigo text;
+begin
+  select id into v_a from esportes where nome = 'Futsal feminino';   -- manha
+  select id into v_b from esportes where nome = 'Tênis de mesa';     -- manha
+
+  v_codigo := criar_inscricao('jubigday-2026', 1, jsonb_build_array(jsonb_build_object(
+    'nome','Dois No Mesmo Turno','cpf','00000010073','nascimento','2000-01-01',
+    'igreja','PIB Assis','deBoa',false,
+    'esportes', jsonb_build_array(v_a, v_b))));
+  raise notice 'ok    duas modalidades no mesmo turno sao aceitas (%)', v_codigo;
+end $$;
+
+-- Com o limite em 1, volta a recusar.
+set role postgres;
+update eventos set max_esportes_por_turno = 1 where slug = 'jubigday-2026';
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
 do $$
 declare v_a uuid; v_b uuid;
 begin
   select id into v_a from esportes where nome = 'Futsal feminino';
-  select id into v_b from esportes where nome = 'Tênis de mesa';  -- mesmo horário 14h00
+  select id into v_b from esportes where nome = 'Tênis de mesa';
   perform espera_erro(
     format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
       jsonb_build_array(jsonb_build_object(
-        'nome','Dois Horarios','cpf','11144477735','nascimento','2000-01-01',
+        'nome','Passou Do Limite','cpf','00000013765','nascimento','2000-01-01',
         'igreja','PIB Assis','deBoa',false,
         'esportes', jsonb_build_array(v_a, v_b)))::text),
-    'conflito de horario', 'duas modalidades no mesmo horario recusado');
+    'limite_no_turno', 'limite de 1 por turno recusa a segunda');
 end $$;
+
+set role postgres;
+update eventos set max_esportes_por_turno = 0 where slug = 'jubigday-2026';
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
 -- ============================================================
 -- Modalidade lotada
@@ -361,6 +385,118 @@ exception when others then
   else
     raise exception 'FALHOU — usuario comum enxerga token de confirmacao';
   end if;
+end $$;
+
+-- ============================================================
+-- Níveis de acesso: admin, membro, usuário comum
+-- ============================================================
+set role postgres;
+-- 3 vira membro da diretoria; 4 já é admin.
+insert into diretoria (user_id, papel)
+values ('33333333-3333-3333-3333-333333333333', 'membro')
+on conflict (user_id) do update set papel = 'membro';
+
+set role authenticated;
+
+-- --- membro ---
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$
+begin
+  if not eh_diretoria() then raise exception 'FALHOU — membro nao e reconhecido como diretoria'; end if;
+  raise notice 'ok    membro conta como diretoria';
+
+  if eh_admin() then raise exception 'FALHOU — membro aparece como admin'; end if;
+  raise notice 'ok    membro nao e admin';
+end $$;
+
+do $$
+declare v_evento uuid;
+begin
+  select id into v_evento from eventos where slug = 'jubigday-2026';
+  perform espera_erro(
+    format($x$ insert into esportes (evento_id, nome, turno, vagas) values (%L, 'Teste Membro', 'tarde', 10) $x$, v_evento),
+    'row-level security', 'membro nao cria modalidade');
+end $$;
+
+do $$
+begin
+  perform espera_erro(
+    $x$ insert into diretoria (user_id, papel) values ('22222222-2222-2222-2222-222222222222', 'admin') $x$,
+    'row-level security', 'membro nao mexe na equipe');
+end $$;
+
+-- Mas o trabalho do dia a dia continua sendo dele.
+do $$
+begin
+  update inscricoes set status = 'confirmada' where codigo = 'JD-0001';
+  if (select status from inscricoes where codigo = 'JD-0001') <> 'confirmada' then
+    raise exception 'FALHOU — membro nao consegue validar inscricao';
+  end if;
+  raise notice 'ok    membro valida inscricao';
+end $$;
+
+-- --- admin ---
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare v_evento uuid; v_novo uuid;
+begin
+  if not eh_admin() then raise exception 'FALHOU — admin nao e reconhecido'; end if;
+  raise notice 'ok    admin reconhecido';
+
+  select id into v_evento from eventos where slug = 'jubigday-2026';
+  insert into esportes (evento_id, nome, turno, vagas, por_equipe, ordem)
+  values (v_evento, 'Peteca', 'tarde', 12, false, 9) returning id into v_novo;
+  raise notice 'ok    admin cria modalidade';
+
+  update esportes set vagas = 20 where id = v_novo;
+  raise notice 'ok    admin altera modalidade';
+
+  delete from esportes where id = v_novo;
+  raise notice 'ok    admin apaga modalidade';
+
+  update eventos set max_esportes_por_turno = 0 where id = v_evento;
+  raise notice 'ok    admin edita o evento';
+end $$;
+
+-- --- usuário comum ---
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+declare v_evento uuid;
+begin
+  if eh_diretoria() then raise exception 'FALHOU — usuario comum aparece como diretoria'; end if;
+  raise notice 'ok    usuario comum nao e diretoria';
+
+  select id into v_evento from eventos where slug = 'jubigday-2026';
+  perform espera_erro(
+    format($x$ insert into esportes (evento_id, nome, turno, vagas) values (%L, 'Teste Comum', 'tarde', 10) $x$, v_evento),
+    'row-level security', 'usuario comum nao cria modalidade');
+end $$;
+
+-- --- o último admin não pode sumir ---
+set role postgres;
+do $$
+declare v_admins int;
+begin
+  select count(*) into v_admins from diretoria where papel = 'admin';
+  if v_admins <> 1 then
+    raise exception 'teste mal montado: esperava 1 admin, ha %', v_admins;
+  end if;
+
+  begin
+    delete from diretoria where user_id = '44444444-4444-4444-4444-444444444444';
+    raise exception 'FALHOU — apagou o ultimo admin';
+  exception when others then
+    if position('ultimo_admin' in sqlerrm) = 0 then raise; end if;
+    raise notice 'ok    nao da para apagar o ultimo admin';
+  end;
+
+  begin
+    update diretoria set papel = 'membro' where user_id = '44444444-4444-4444-4444-444444444444';
+    raise exception 'FALHOU — rebaixou o ultimo admin';
+  exception when others then
+    if position('ultimo_admin' in sqlerrm) = 0 then raise; end if;
+    raise notice 'ok    nao da para rebaixar o ultimo admin';
+  end;
 end $$;
 
 select 'TODOS OS TESTES PASSARAM' as resultado;

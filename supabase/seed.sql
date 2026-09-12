@@ -50,22 +50,22 @@ on conflict (slug) do nothing;
 
 -- ------------------------------------------------------------
 -- Modalidades do JubigDay.
--- O horário é o que agrupa na tela e o que bloqueia conflito — modalidades
--- com o mesmo texto de horário viram um grupo de escolha única.
+-- O turno é o que agrupa na tela. Quantas modalidades a pessoa pode pegar no
+-- mesmo turno vem de `eventos.max_esportes_por_turno` (0 = sem limite).
 -- ------------------------------------------------------------
 with e as (select id from eventos where slug = 'jubigday-2026')
-insert into esportes (evento_id, nome, horario, vagas, por_equipe, ordem)
-select e.id, d.nome, d.horario, d.vagas, d.por_equipe, d.ordem
+insert into esportes (evento_id, nome, turno, vagas, por_equipe, ordem)
+select e.id, d.nome, d.turno, d.vagas, d.por_equipe, d.ordem
   from e, (values
-    ('Futsal masculino',    '14h00', 60, true,  1),
-    ('Futsal feminino',     '14h00', 40, true,  2),
-    ('Vôlei misto',         '14h00', 48, true,  3),
-    ('Tênis de mesa',       '14h00', 16, false, 4),
-    ('Basquete 3x3',        '16h00', 36, true,  1),
-    ('Queimada',            '16h00', 60, true,  2),
-    ('Xadrez',              '16h00', 16, false, 3),
-    ('Dominó',              '16h00', 24, false, 4)
-  ) as d(nome, horario, vagas, por_equipe, ordem)
+    ('Futsal masculino',    'manha', 60, true,  1),
+    ('Futsal feminino',     'manha', 40, true,  2),
+    ('Vôlei misto',         'manha', 48, true,  3),
+    ('Tênis de mesa',       'manha', 16, false, 4),
+    ('Basquete 3x3',        'tarde', 36, true,  1),
+    ('Queimada',            'tarde', 60, true,  2),
+    ('Xadrez',              'tarde', 16, false, 3),
+    ('Dominó',              'tarde', 24, false, 4)
+  ) as d(nome, turno, vagas, por_equipe, ordem)
  where not exists (
    select 1 from esportes s where s.evento_id = e.id and s.nome = d.nome
  );
