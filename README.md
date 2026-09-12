@@ -5,10 +5,17 @@ Next.js 16 + Supabase + Resend, hospedado na Vercel.
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
-npm run build        # precisa passar sem erro antes de subir
-npm run verificar    # CPF, idade, máscaras, telefone e BR Code do PIX
+npm run dev             # http://localhost:3000
+npm run build           # precisa passar sem erro antes de subir
+npm run verificar       # CPF, idade, máscaras, telefone e BR Code do PIX
+npm run testar:schema   # aplica o SQL num Postgres descartável e testa as regras
 ```
+
+`testar:schema` precisa do Docker aberto. Ele sobe um Postgres do zero, roda
+`schema.sql` e `seed.sql`, confere 22 regras (RLS, CPF duplicado, idade, vaga,
+conflito de horário, prazo de troca) e derruba o container. **Rode antes de
+colar qualquer alteração de SQL no Supabase** — é a diferença entre achar um
+erro aqui e achar no banco com inscrição de gente de verdade dentro.
 
 ---
 
@@ -23,7 +30,12 @@ No SQL Editor do Supabase, rode nesta ordem:
 1. `supabase/schema.sql` — tabelas, RLS, triggers e os buckets.
 2. `supabase/seed.sql` — JubigDay 2026, modalidades e dúvidas.
 
-Os dois são idempotentes: pode rodar de novo depois de editar.
+Os dois são idempotentes: pode rodar de novo depois de editar. Os dois já
+rodam limpos em `npm run testar:schema`, então erro aqui é sinal de que a
+edição quebrou alguma coisa — rode o teste local antes de insistir.
+
+Os `NOTICE: ... does not exist, skipping` que aparecem são normais: são os
+`drop ... if exists` do começo de cada bloco.
 
 **Antes de abrir para o público**, edite a linha do evento:
 
