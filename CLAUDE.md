@@ -69,7 +69,7 @@ comprovantes — nunca mexe em código.
 Tirada do logo (capivara de óculos e jaqueta, chamada **Juca**).
 
 ```
---laranja: #E26722    --laranja-escuro: #B44C13
+--laranja: #D94C1A    --laranja-escuro: #A83A12
 --tinta:   #2A1710    --creme: #F8F1E0
 --areia:   #EFE4CE    --linha: #E0D3BC
 --apagado: #7A6350

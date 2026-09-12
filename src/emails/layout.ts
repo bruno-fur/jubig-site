@@ -5,8 +5,8 @@ type Estado = "feliz" | "joia" | "nao" | "nervoso" | "choro" | "choque" | "heh" 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export const CORES = {
-  laranja: "#E26722",
-  laranjaEscuro: "#B44C13",
+  laranja: "#D94C1A",
+  laranjaEscuro: "#A83A12",
   tinta: "#2A1710",
   creme: "#F8F1E0",
   areia: "#EFE4CE",
@@ -51,7 +51,15 @@ export function layout({ preheader, estado, titulo, corpo, botao, rodapeWhatsApp
 
     <tr><td style="background:${CORES.tinta};padding:22px 24px;border-bottom:4px solid ${CORES.laranja};">
       <table role="presentation" width="100%"><tr>
-        <td style="color:#ffffff;font-size:21px;font-weight:800;letter-spacing:-0.5px;">JU<span style="color:${CORES.laranja}">BIG</span></td>
+        <td>
+          <!--
+            Logo com largura fixa em atributo, não só em CSS: o Outlook ignora
+            largura declarada em style e estoura a imagem no tamanho original.
+            O alt segura o texto para quem bloqueia imagem.
+          -->
+          <img src="${ASSETS}/logo-jubig-branco.png" width="150" height="75" alt="JUBIG"
+               style="display:block;width:150px;height:auto;border:0;">
+        </td>
         <td align="right" style="color:#CBB8A4;font-size:13px;">Juventude Batista do Iguaçu</td>
       </tr></table>
     </td></tr>

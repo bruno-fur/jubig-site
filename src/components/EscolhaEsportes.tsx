@@ -52,7 +52,7 @@ export function EscolhaEsportes({
           type="checkbox"
           checked={deBoa}
           onChange={(e) => aoMarcarDeBoa(e.target.checked)}
-          className="h-5 w-5 accent-[#E26722]"
+          className="h-5 w-5 accent-[#D94C1A]"
         />
         <span className="text-sm font-semibold text-tinta">
           Vou só de boa — não quero competir
@@ -87,7 +87,7 @@ export function EscolhaEsportes({
                       checked={marcado}
                       onChange={() => trocar(horario, e.esporte_id)}
                       onClick={() => marcado && trocar(horario, e.esporte_id)}
-                      className="h-4 w-4 accent-[#E26722]"
+                      className="h-4 w-4 accent-[#D94C1A]"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-tinta">{e.nome}</span>

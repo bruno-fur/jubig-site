@@ -8,10 +8,15 @@ export function Rodape() {
     <footer className="mt-16 border-t border-linha bg-tinta text-creme">
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 sm:grid-cols-3">
         <div>
-          <p className="titulo text-lg">
-            JU<span className="text-laranja">BIG</span>
-          </p>
-          <p className="mt-2 text-sm text-creme/70">
+          {/* Versão branca: o rodapé é escuro e a laranja some no fundo tinta. */}
+          <img
+            src="/logo-jubig-branco.png"
+            alt="JUBIG"
+            width={220}
+            height={110}
+            className="h-10 w-auto"
+          />
+          <p className="mt-3 text-sm text-creme/70">
             Juventude Batista do Iguaçu — jovens das igrejas batistas do oeste do Paraná.
           </p>
         </div>
