@@ -75,28 +75,40 @@ try {
     else ok("nasce sem confirmação, como deve");
   }
 
-  // --- a camada 4 barra quem não confirmou? ---
-  if (cadastro.session) {
-    const comoUsuario = createClient(url, publishable, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: `Bearer ${cadastro.session.access_token}` } },
+  /*
+   * Camada 4, testada na própria política.
+   *
+   * Passar por `criar_inscricao` não serve: com o evento despublicado ela
+   * para antes, em 'evento_nao_encontrado', e o teste passaria verde sem
+   * nunca ter encostado na RLS. O insert direto em `inscricoes` bate na
+   * política "criar inscricao com email confirmado" e em mais nada.
+   */
+  const comoUsuario = cadastro.session
+    ? createClient(url, publishable, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${cadastro.session.access_token}` } },
+      })
+    : null;
+
+  const { data: evento } = await admin
+    .from("eventos")
+    .select("id, valor_centavos")
+    .eq("slug", "jubigday-2026")
+    .maybeSingle();
+
+  const tentarInscrever = async (codigo: string) =>
+    comoUsuario!.from("inscricoes").insert({
+      codigo,
+      evento_id: evento!.id,
+      responsavel_id: userId,
+      valor_centavos: evento!.valor_centavos,
     });
-    const { error } = await comoUsuario.rpc("criar_inscricao", {
-      p_slug: "jubigday-2026",
-      p_parcelas: 1,
-      p_inscritos: [
-        {
-          nome: "Fulano De Teste",
-          cpf: "52998224725",
-          nascimento: "2000-01-01",
-          igreja: "IB Teste",
-          deBoa: true,
-          esportes: [],
-        },
-      ],
-    });
-    if (error) ok(`camada 4 barrou a inscrição sem confirmação (${error.code ?? "erro"})`);
-    else falha("camada 4", "conseguiu se inscrever SEM ter confirmado o e-mail");
+
+  if (comoUsuario && evento) {
+    const { error } = await tentarInscrever(`TS-${Date.now()}`);
+    if (error?.code === "42501") ok("camada 4: a RLS recusou o insert sem confirmação");
+    else if (error) falha("camada 4", `recusou, mas por outro motivo: ${error.code} ${error.message}`);
+    else falha("camada 4", "gravou inscrição SEM e-mail confirmado");
   }
 
   // --- confirmação ---
@@ -125,6 +137,18 @@ try {
     const { data: repetido } = await admin.rpc("confirmar_email", { p_token: token.token });
     if (repetido === "ja_usado") ok("token não serve duas vezes");
     else falha("reuso de token", `devolveu ${repetido}`);
+
+    // A mesma política, agora com o e-mail confirmado, precisa deixar passar —
+    // senão a camada 4 estaria barrando todo mundo, e ninguém se inscreveria.
+    if (comoUsuario && evento) {
+      const codigo = `TS-${Date.now()}`;
+      const { error } = await tentarInscrever(codigo);
+      if (error) falha("camada 4 depois de confirmar", `${error.code} ${error.message}`);
+      else {
+        ok("camada 4: confirmado passa a conseguir gravar inscrição");
+        await admin.from("inscricoes").delete().eq("codigo", codigo);
+      }
+    }
   }
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);
