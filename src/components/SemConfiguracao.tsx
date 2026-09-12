@@ -28,6 +28,23 @@ export function SemConfiguracao({ faltando }: { faltando: string[] }) {
     .filter((k) => /SUP|BASE|ANON|SERVICE_ROLE/i.test(k))
     .sort();
 
+  /*
+   * Acesso por chave dinâmica. O Next substitui `process.env.NOME_LITERAL` no
+   * momento do build; com a chave numa variável ele não consegue, e a leitura
+   * acontece de verdade em runtime.
+   *
+   * Comparar os dois separa o que a lista de nomes não separa:
+   *   vazio nos dois   -> a variável foi salva sem valor
+   *   só runtime tem   -> o valor existe mas não chegou ao build
+   *                       (na Vercel, é a marcação "Sensitive")
+   */
+  const env = process.env as Record<string, string | undefined>;
+  const comparacao = faltando.map((nome) => ({
+    nome,
+    runtime: Boolean(env[nome]?.trim()),
+  }));
+  const soEmRuntime = comparacao.some((c) => c.runtime);
+
   return (
     <html lang="pt-BR">
       <body
@@ -94,10 +111,59 @@ export function SemConfiguracao({ faltando }: { faltando: string[] }) {
             )}
           </ul>
 
-          <p style={{ margin: 0, lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
-            Se um nome acima estiver escrito diferente do esperado, é erro de digitação no painel.
-            Se a lista estiver vazia, as variáveis foram salvas em outro projeto ou escopo. Se os
-            nomes baterem, a variável existe mas está com valor vazio.
+          <p style={{ margin: "0 0 10px", lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
+            Valor conferido agora, em tempo de execução:
+          </p>
+          <ul
+            style={{
+              margin: "0 0 20px",
+              padding: "14px 18px",
+              background: "#fff",
+              border: "1px solid #E0D3BC",
+              borderRadius: 10,
+              listStyle: "none",
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 14,
+            }}
+          >
+            {comparacao.map((c) => (
+              <li key={c.nome} style={{ padding: "3px 0" }}>
+                {c.nome} —{" "}
+                <span style={{ color: c.runtime ? "#B44C13" : "#C0392B" }}>
+                  {c.runtime ? "tem valor, mas não chegou ao build" : "sem valor"}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p
+            style={{
+              margin: 0,
+              lineHeight: 1.6,
+              color: "#2A1710",
+              fontSize: 14,
+              padding: "14px 18px",
+              background: "#EFE4CE",
+              borderRadius: 10,
+            }}
+          >
+            {soEmRuntime ? (
+              <>
+                <strong>O valor existe, mas o build não o recebeu.</strong> Na Vercel isso é a
+                marcação <strong>Sensitive</strong> da variável: ela fica disponível só em tempo de
+                execução. Variável <code>NEXT_PUBLIC_</code> precisa existir durante o build, porque
+                o valor é embutido no JavaScript que vai para o navegador. Desmarque Sensitive
+                nessas duas — a URL e a chave publishable são públicas por definição, quem protege
+                os dados é a RLS. Depois, novo deploy.
+              </>
+            ) : (
+              <>
+                <strong>A variável existe com valor vazio.</strong> Na Vercel, abra cada uma no{" "}
+                <code>⋯</code> → Edit e confira se o campo Value está preenchido — colar várias
+                linhas de uma vez às vezes cria o nome e deixa o valor para trás. Depois, novo
+                deploy.
+              </>
+            )}
           </p>
           <p style={{ margin: "10px 0 0", lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
             Na Vercel: Settings → Environment Variables. Elas são congeladas no build, então{" "}
