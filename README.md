@@ -1,7 +1,7 @@
 # Site da JUBIG
 
 Site de divulgação e inscrições da Juventude Batista do Iguaçu.
-Next.js 16 + Supabase + Resend, hospedado na Vercel.
+Next.js 16 + Supabase + SMTP do Gmail, hospedado na Vercel.
 
 ```bash
 npm install
@@ -67,27 +67,42 @@ Em **Authentication → Sign In / Providers → Email**:
 
 Em **Authentication → URL Configuration**:
 
-- Site URL: `https://jubig.vercel.app` (ou o domínio final)
+- Site URL: `https://jubig-site.vercel.app` (ou o domínio final)
 - Redirect URLs: acrescente `https://SEU-DOMINIO/auth/callback` e
   `http://localhost:3000/auth/callback`
 
 ### 4. E-mail
 
-São dois caminhos diferentes, e os dois precisam do Resend:
+Tudo sai de `jubig.ofc@gmail.com`, pelo SMTP do Gmail. São dois caminhos
+diferentes, com a mesma conta nos dois:
 
 | E-mail | Quem dispara | Onde fica o template |
 |---|---|---|
 | Confirmação de endereço | Supabase | painel do Supabase |
 | Inscrição, comprovante, aprovação, recusa | nosso código | `src/emails/templates.ts` |
 
-**Custom SMTP** (Authentication → Emails → SMTP Settings): aponte para o
-Resend. Sem isso o Supabase usa o SMTP compartilhado dele, que entrega poucos
-e-mails por hora e cai em spam.
+**Senha de app.** A senha normal do Gmail não serve para SMTP. Na conta
+Google: Segurança → ative a verificação em duas etapas (obrigatória) →
+Senhas de app → gere uma. São 16 letras; pode colar com ou sem os espaços.
+
+**Custom SMTP** (Authentication → Emails → SMTP Settings). Sem isso o Supabase
+usa o SMTP compartilhado dele, que entrega poucos e-mails por hora e cai em
+spam:
 
 ```
-Host: smtp.resend.com    Porta: 465
-Usuário: resend          Senha: sua RESEND_API_KEY
+Host: smtp.gmail.com     Porta: 465
+Usuário: jubig.ofc@gmail.com
+Senha:   a senha de app
+Sender:  jubig.ofc@gmail.com    (tem que ser a MESMA conta)
 ```
+
+Na mesma tela, suba o **rate limit** do Supabase — o padrão é baixo demais
+para um dia de abertura de inscrições.
+
+Por que Gmail e não Resend: o Resend só envia de domínio verificado por SPF e
+DKIM, e ninguém publica DNS no `gmail.com`. No dia em que a JUBIG tiver
+domínio próprio, vale voltar para um serviço de envio — a troca é só
+`src/lib/email.ts`, que é o único arquivo que conhece o provedor.
 
 Depois, em **Authentication → Emails → Confirm signup**, cole o HTML gerado por:
 
@@ -114,8 +129,9 @@ NEXT_PUBLIC_INSTAGRAM
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY           # só servidor, nunca em "use client"
-RESEND_API_KEY
-EMAIL_REMETENTE                     # JUBIG <contato@jubig.org.br>
+GMAIL_USUARIO                       # jubig.ofc@gmail.com
+GMAIL_SENHA_APP                     # a senha de app, 16 letras
+EMAIL_NOME_REMETENTE                # JUBIG
 ```
 
 As `NEXT_PUBLIC_*` são **congeladas no build**. Mudar qualquer uma delas na
@@ -126,8 +142,10 @@ Se `NEXT_PUBLIC_SITE_URL` faltar, `src/lib/site.ts` cai na URL de produção que
 a própria Vercel injeta. Funciona, mas prefira declarar: no dia em que entrar
 um domínio próprio, é essa variável que manda.
 
-No Resend, o domínio do `EMAIL_REMETENTE` precisa estar verificado (SPF e
-DKIM), senão o Gmail manda tudo para spam.
+O endereço do remetente é sempre o `GMAIL_USUARIO`. `EMAIL_NOME_REMETENTE`
+muda só o nome que aparece na caixa de entrada — o Gmail reescreve qualquer
+From diferente da conta autenticada, então não adianta tentar mandar como
+outro endereço.
 
 ### 6. MCP do Supabase (opcional, para o Claude Code)
 
@@ -234,11 +252,16 @@ public/juca/              as 8 figurinhas em WebP
   RLS.
 - **O CSV exportado tem CPF e telefone de todos os inscritos.** Não mande em
   grupo de WhatsApp.
-- **Resend gratuito: 3.000/mês, mas 100 por dia.** Cada inscrição gasta cerca
-  de três e-mails (confirmação de conta, inscrição registrada, comprovante) e
-  mais um na validação. Um pico de 25 inscrições no mesmo dia já encosta no
-  teto. Se acontecer, troque para o Brevo (300/dia) mexendo só em
-  `src/lib/email.ts` — e lembre que o SMTP do Supabase também precisa mudar.
+- **Gmail grátis: 500 destinatários por dia.** Cada inscrição gasta cerca de
+  três e-mails (confirmação de conta, inscrição registrada, comprovante) e
+  mais um na validação — dá algo perto de 125 inscrições por dia. Estourando,
+  o Gmail devolve `550 5.4.5` e **para de enviar até o dia seguinte**: a
+  inscrição é gravada, mas ninguém recebe nada. O log grita quando isso
+  acontece. Se o pico chegar perto disso, o caminho é domínio próprio com
+  serviço de envio, trocando só `src/lib/email.ts`.
+- **Remetente @gmail.com cai em spam com mais facilidade** que um domínio
+  próprio com SPF e DKIM. Antes de abrir, mande um teste para Gmail, Outlook e
+  Hotmail e confira onde caiu.
 - **O PIX não confirma pagamento sozinho.** O BR Code é estático; quem
   confirma é a diretoria olhando o comprovante. Confirmação automática
   exigiria PSP com API, CNPJ e mensalidade.

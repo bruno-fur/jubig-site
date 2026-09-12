@@ -1,4 +1,5 @@
-import { Resend } from "resend";
+import "server-only";
+import nodemailer, { type Transporter } from "nodemailer";
 import {
   emailConfirmacaoEndereco,
   emailInscricaoRecebida,
@@ -8,38 +9,67 @@ import {
   type DadosInscricao,
 } from "@/emails/templates";
 
-const DE = process.env.EMAIL_REMETENTE ?? "JUBIG <contato@jubig.org.br>";
-
 /*
- * Criado só na hora de enviar. O construtor do Resend estoura quando a chave
- * está vazia; se ele rodasse no topo do arquivo, `npm run build` quebraria em
- * qualquer máquina sem RESEND_API_KEY — incluindo o build da Vercel antes de
- * alguém cadastrar a variável.
+ * Envio pelo SMTP do Gmail, com senha de app.
+ *
+ * Por que não Resend: ele só envia de domínio verificado por SPF e DKIM, e
+ * ninguém publica DNS no gmail.com. Enquanto a JUBIG não tiver domínio
+ * próprio, o Gmail é o caminho que funciona — e ainda dá 500 envios por dia
+ * contra os 100 do Resend gratuito.
+ *
+ * Trocar de provedor depois é mexer só neste arquivo: o resto do código
+ * conhece apenas o objeto `Emails` lá embaixo.
  */
-let resend: Resend | null = null;
-function cliente() {
-  if (!process.env.RESEND_API_KEY) return null;
-  resend ??= new Resend(process.env.RESEND_API_KEY);
-  return resend;
+
+const NOME = process.env.EMAIL_NOME_REMETENTE ?? "JUBIG";
+
+let transporte: Transporter | null = null;
+
+function conexao() {
+  const usuario = process.env.GMAIL_USUARIO?.trim();
+  const senha = process.env.GMAIL_SENHA_APP?.replace(/\s/g, "");
+  if (!usuario || !senha) return null;
+
+  transporte ??= nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user: usuario, pass: senha },
+    // Sem isso, cada envio abre e fecha conexão TLS — caro em serverless.
+    pool: true,
+    maxConnections: 2,
+  });
+  return { transporte, usuario };
 }
 
 async function enviar(para: string, msg: { subject: string; html: string }) {
-  const api = cliente();
-  if (!api) {
-    console.error("[email] RESEND_API_KEY não configurada — não enviei", para, msg.subject);
-    return { ok: false as const, erro: "sem_chave" };
+  const conn = conexao();
+  if (!conn) {
+    console.error("[email] GMAIL_USUARIO/GMAIL_SENHA_APP não configurados — não enviei", para, msg.subject);
+    return { ok: false as const, erro: "sem_credencial" };
   }
 
   try {
-    const { data, error } = await api.emails.send({ from: DE, to: para, ...msg });
-    if (error) {
-      console.error("[email] falhou", para, msg.subject, error);
-      return { ok: false as const, erro: error.message };
-    }
-    return { ok: true as const, id: data?.id };
+    /*
+     * O endereço do remetente é SEMPRE a conta autenticada. O Gmail reescreve
+     * (ou recusa) qualquer From diferente dela, então deixar isso configurável
+     * só geraria e-mail saindo com remetente que ninguém esperava.
+     */
+    const info = await conn.transporte.sendMail({
+      from: { name: NOME, address: conn.usuario },
+      to: para,
+      subject: msg.subject,
+      html: msg.html,
+    });
+    return { ok: true as const, id: info.messageId };
   } catch (e) {
-    console.error("[email] exceção", e);
-    return { ok: false as const, erro: "falha de rede" };
+    const erro = e instanceof Error ? e.message : String(e);
+    console.error("[email] falhou", para, msg.subject, erro);
+    // 550 5.4.5 é o limite diário do Gmail estourado: some tudo de uma vez.
+    if (/5\.4\.5|Daily user sending (limit|quota) exceeded/i.test(erro)) {
+      console.error("[email] LIMITE DIÁRIO DO GMAIL ESTOURADO — nenhum e-mail sai até amanhã");
+    }
+    return { ok: false as const, erro };
   }
 }
 
