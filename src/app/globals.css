@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+/* Paleta tirada do logo: a capivara de óculos e jaqueta, o Juca. */
+@theme {
+  --color-laranja: #e26722;
+  --color-laranja-escuro: #b44c13;
+  --color-tinta: #2a1710;
+  --color-creme: #f8f1e0;
+  --color-areia: #efe4ce;
+  --color-linha: #e0d3bc;
+  --color-apagado: #7a6350;
+  --color-ok: #2e7d32;
+  --color-ruim: #c0392b;
+
+  --font-display: var(--fonte-titulo), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--fonte-texto), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-botao: 10px;
+  --radius-cartao: 16px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-creme);
+  color: var(--color-tinta);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.titulo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* O foco precisa aparecer: metade das inscrições sai de teclado de celular. */
+:focus-visible {
+  outline: 3px solid var(--color-laranja);
+  outline-offset: 2px;
+}
+
+@utility botao-primario {
+  @apply inline-flex items-center justify-center gap-2 rounded-[10px] bg-laranja px-5 py-3
+         font-semibold text-white transition hover:bg-laranja-escuro
+         disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility botao-secundario {
+  @apply inline-flex items-center justify-center gap-2 rounded-[10px] border-2 border-linha
+         bg-white px-5 py-3 font-semibold text-tinta transition hover:border-laranja
+         hover:text-laranja-escuro disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility cartao {
+  @apply rounded-[16px] border border-linha bg-white;
+}
+
+@utility campo-texto {
+  @apply w-full rounded-[10px] border-2 border-linha bg-white px-4 py-3 text-tinta
+         transition placeholder:text-apagado/60 focus:border-laranja focus:outline-none;
+}
+
+/* --------------------------------------------------------------
+   Animações do Juca.
+   Só entram quando a figurinha muda — se rodassem a cada tecla,
+   ele pulsaria letra por letra e viraria ruído na tela.
+   -------------------------------------------------------------- */
+@keyframes juca-entra {
+  0% {
+    transform: scale(0.82) rotate(-6deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes juca-balanca {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-7deg);
+  }
+  75% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes bolha-entra {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.juca-troca {
+  animation: juca-entra 340ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.juca-nega {
+  animation: juca-balanca 380ms ease-in-out;
+}
+
+.bolha {
+  animation: bolha-entra 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .juca-troca,
+  .juca-nega,
+  .bolha,
+  *[class*="animate-"] {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
