@@ -1,0 +1,97 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { exigirEmailConfirmado } from "@/lib/sessao";
+import { createClient } from "@/lib/supabase/server";
+import {
+  eventoPorSlug,
+  esportesDoEvento,
+  agruparPorHorario,
+  inscricoesAbertas,
+  vagasRestantes,
+} from "@/lib/eventos";
+import { formatarData, formatarReais } from "@/lib/validacao";
+import { FormularioInscricao } from "./FormularioInscricao";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ evento: string }>;
+}): Promise<Metadata> {
+  const { evento: slug } = await params;
+  const evento = await eventoPorSlug(slug);
+  return { title: evento ? `Inscrição — ${evento.nome}` : "Inscrição" };
+}
+
+export default async function PaginaInscricao({
+  params,
+}: {
+  params: Promise<{ evento: string }>;
+}) {
+  const { evento: slug } = await params;
+
+  // Camada 2: guard de rota. Quem não confirmou nem chega a ver o formulário.
+  const sessao = await exigirEmailConfirmado();
+
+  const evento = await eventoPorSlug(slug);
+  if (!evento) notFound();
+
+  if (!inscricoesAbertas(evento)) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+        <img src="/juca/choro.webp" alt="" className="mx-auto w-32" />
+        <h1 className="mt-4 text-3xl">Inscrições encerradas</h1>
+        <p className="mt-2 text-apagado">
+          As inscrições do {evento.nome} fecharam em{" "}
+          {formatarData(evento.inscricoes_ate ?? evento.data_evento)}.
+        </p>
+        <Link href={`/${evento.slug}`} className="botao-secundario mt-6">
+          Ver o evento
+        </Link>
+      </div>
+    );
+  }
+
+  const [esportes, restantes] = await Promise.all([
+    esportesDoEvento(evento.id),
+    vagasRestantes(evento),
+  ]);
+
+  const supabase = await createClient();
+  const { data: perfil } = await supabase
+    .from("perfis")
+    .select("nome, telefone, igreja")
+    .eq("id", sessao.userId)
+    .maybeSingle();
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <p className="text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
+        {evento.nome}
+      </p>
+      <h1 className="mt-1 text-3xl">Inscrição</h1>
+      <p className="mt-2 text-apagado">
+        {formatarData(evento.data_evento)} · {evento.cidade} ·{" "}
+        {formatarReais(evento.valor_centavos)} por pessoa
+      </p>
+
+      <FormularioInscricao
+        evento={{
+          slug: evento.slug,
+          nome: evento.nome,
+          dataEvento: evento.data_evento,
+          idadeMinima: evento.idade_minima,
+          maxParcelas: evento.max_parcelas,
+          valorCentavos: evento.valor_centavos,
+        }}
+        grupos={agruparPorHorario(esportes)}
+        vagasRestantes={restantes}
+        perfil={{
+          nome: perfil?.nome ?? sessao.nome ?? "",
+          igreja: perfil?.igreja ?? "",
+          telefone: perfil?.telefone ?? "",
+        }}
+      />
+    </div>
+  );
+}

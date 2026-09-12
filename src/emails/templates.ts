@@ -1,4 +1,4 @@
-import { layout, texto, caixaDados, selo, CORES } from "./layout";
+import { layout, texto, caixaDados, selo, CORES } from "./layout.ts";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jubig.vercel.app";
 

@@ -371,16 +371,44 @@ create policy "meus inscritos" on inscritos
   );
 
 drop policy if exists "meus esportes" on inscritos_esportes;
-create policy "meus esportes" on inscritos_esportes
-  for all using (
+drop policy if exists "ver meus esportes" on inscritos_esportes;
+create policy "ver meus esportes" on inscritos_esportes
+  for select using (
     exists (select 1 from inscritos ins
              join inscricoes i on i.id = ins.inscricao_id
             where ins.id = inscrito_id
               and (i.responsavel_id = auth.uid() or eh_diretoria()))
-  ) with check (
+  );
+
+/*
+ * Escolher e trocar modalidade só até `troca_esporte_ate_dias` antes do
+ * evento. A mesma regra vale na criação da inscrição — o que está certo,
+ * desde que `inscricoes_ate` seja anterior a esse prazo (no JubigDay:
+ * inscrições até 26/09, troca até 10/10). Se alguém inverter isso na tabela
+ * de eventos, a inscrição para de funcionar — e é melhor falhar aqui do que
+ * aceitar troca depois que a diretoria já fechou as chaves.
+ */
+drop policy if exists "escolher meus esportes" on inscritos_esportes;
+create policy "escolher meus esportes" on inscritos_esportes
+  for insert with check (
     exists (select 1 from inscritos ins
              join inscricoes i on i.id = ins.inscricao_id
-            where ins.id = inscrito_id and i.responsavel_id = auth.uid())
+             join eventos e on e.id = i.evento_id
+            where ins.id = inscrito_id
+              and i.responsavel_id = auth.uid()
+              and current_date <= e.data_evento - e.troca_esporte_ate_dias)
+  );
+
+drop policy if exists "desmarcar meus esportes" on inscritos_esportes;
+create policy "desmarcar meus esportes" on inscritos_esportes
+  for delete using (
+    exists (select 1 from inscritos ins
+             join inscricoes i on i.id = ins.inscricao_id
+             join eventos e on e.id = i.evento_id
+            where ins.id = inscrito_id
+              and (eh_diretoria()
+                   or (i.responsavel_id = auth.uid()
+                       and current_date <= e.data_evento - e.troca_esporte_ate_dias)))
   );
 
 drop policy if exists "meus comprovantes" on comprovantes;
@@ -461,3 +489,186 @@ create policy "ver fotos" on storage.objects
 drop policy if exists "diretoria envia fotos" on storage.objects;
 create policy "diretoria envia fotos" on storage.objects
   for insert to authenticated with check (bucket_id = 'fotos' and eh_diretoria());
+
+-- ============================================================
+-- Criação da inscrição em uma transação só.
+--
+-- Sem isto seriam três inserts separados pelo PostgREST: se a última
+-- modalidade lotasse no meio do caminho, ficava uma inscrição com gente
+-- dentro e sem esporte, e ninguém para limpar.
+--
+-- security INVOKER de propósito: roda com a permissão de quem chamou, então a
+-- política "criar inscricao com email confirmado" continua valendo aqui — é a
+-- camada 4 e ela não pode ser contornada nem por esta função.
+-- ============================================================
+create or replace function criar_inscricao(
+  p_slug text,
+  p_parcelas int,
+  p_inscritos jsonb
+) returns text language plpgsql as $fn$
+declare
+  v_evento eventos%rowtype;
+  v_codigo text;
+  v_inscricao uuid;
+  v_inscrito uuid;
+  v_ocupadas int;
+  v_quantos int;
+  p jsonb;
+  v_esporte text;
+begin
+  select * into v_evento from eventos where slug = p_slug and publicado;
+  if v_evento.id is null then
+    raise exception 'evento_nao_encontrado';
+  end if;
+
+  if coalesce(v_evento.inscricoes_ate, v_evento.data_evento) < current_date then
+    raise exception 'inscricoes_encerradas';
+  end if;
+
+  v_quantos := coalesce(jsonb_array_length(p_inscritos), 0);
+  if v_quantos < 1 then
+    raise exception 'sem_inscritos';
+  end if;
+
+  if v_evento.vagas is not null then
+    select ocupadas into v_ocupadas from vagas_por_evento where evento_id = v_evento.id;
+    if coalesce(v_ocupadas, 0) + v_quantos > v_evento.vagas then
+      raise exception 'evento_lotado';
+    end if;
+  end if;
+
+  v_codigo := gerar_codigo(v_evento.id);
+
+  insert into inscricoes (codigo, evento_id, responsavel_id, parcelas, valor_centavos)
+  values (v_codigo, v_evento.id, auth.uid(), p_parcelas,
+          v_evento.valor_centavos * v_quantos)
+  returning id into v_inscricao;
+
+  for p in select * from jsonb_array_elements(p_inscritos) loop
+    if extract(year from age(v_evento.data_evento, (p ->> 'nascimento')::date))
+       < v_evento.idade_minima then
+      raise exception 'idade_minima:%', p ->> 'nome';
+    end if;
+
+    insert into inscritos (inscricao_id, nome, cpf, nascimento, telefone, igreja, de_boa)
+    values (
+      v_inscricao,
+      p ->> 'nome',
+      regexp_replace(p ->> 'cpf', '\D', '', 'g'),
+      (p ->> 'nascimento')::date,
+      nullif(p ->> 'telefone', ''),
+      p ->> 'igreja',
+      coalesce((p ->> 'deBoa')::boolean, false)
+    )
+    returning id into v_inscrito;
+
+    for v_esporte in
+      select jsonb_array_elements_text(coalesce(p -> 'esportes', '[]'::jsonb))
+    loop
+      insert into inscritos_esportes (inscrito_id, esporte_id)
+      values (v_inscrito, v_esporte::uuid);
+    end loop;
+  end loop;
+
+  return v_codigo;
+end $fn$;
+
+revoke all on function criar_inscricao(text, int, jsonb) from public, anon;
+grant execute on function criar_inscricao(text, int, jsonb) to authenticated;
+
+-- ============================================================
+-- Comprovante enviado -> inscrição entra em análise.
+--
+-- Fica no banco porque o dono da inscrição não tem política de update em
+-- `inscricoes` (só a diretoria tem). Se o app tentasse mudar o status, a RLS
+-- recusaria em silêncio e a inscrição ficaria travada em
+-- 'aguardando_pagamento' para sempre.
+-- ============================================================
+create or replace function ao_enviar_comprovante() returns trigger
+language plpgsql security definer set search_path = public as $fn$
+begin
+  update inscricoes
+     set status = 'em_analise'
+   where id = new.inscricao_id
+     and status in ('aguardando_pagamento', 'recusada');
+  return new;
+end $fn$;
+
+drop trigger if exists comprovante_muda_status on comprovantes;
+create trigger comprovante_muda_status
+  after insert on comprovantes
+  for each row execute function ao_enviar_comprovante();
+
+-- ============================================================
+-- Troca de modalidade, também em uma transação só.
+--
+-- Feito por fora seriam um delete e vários inserts separados: se a modalidade
+-- nova estivesse lotada, a pessoa perdia a escolha antiga e ficava sem nada.
+--
+-- security INVOKER: o prazo de troca, a vaga e o conflito de horário continuam
+-- sendo decididos pela política e pelo trigger, com a permissão de quem chamou.
+-- ============================================================
+create or replace function trocar_esporte(
+  p_inscrito uuid,
+  p_esportes uuid[],
+  p_de_boa boolean
+) returns void language plpgsql as $fn$
+declare v_esporte uuid;
+begin
+  delete from inscritos_esportes where inscrito_id = p_inscrito;
+
+  foreach v_esporte in array coalesce(p_esportes, '{}'::uuid[]) loop
+    insert into inscritos_esportes (inscrito_id, esporte_id) values (p_inscrito, v_esporte);
+  end loop;
+
+  update inscritos set de_boa = coalesce(p_de_boa, false) where id = p_inscrito;
+
+  if not found then
+    raise exception 'inscrito_nao_encontrado';
+  end if;
+end $fn$;
+
+revoke all on function trocar_esporte(uuid, uuid[], boolean) from public, anon;
+grant execute on function trocar_esporte(uuid, uuid[], boolean) to authenticated;
+
+-- ============================================================
+-- Conteúdo da página do evento: a diretoria edita direto no painel do
+-- Supabase, sem precisar de deploy.
+-- ============================================================
+create table if not exists programacao (
+  id uuid primary key default gen_random_uuid(),
+  evento_id uuid not null references eventos on delete cascade,
+  horario text not null,               -- '08h30'
+  titulo text not null,
+  descricao text,
+  ordem int not null default 0
+);
+create index if not exists programacao_evento on programacao (evento_id);
+
+create table if not exists duvidas (
+  id uuid primary key default gen_random_uuid(),
+  evento_id uuid references eventos on delete cascade,  -- null = vale para todos
+  pergunta text not null,
+  resposta text not null,
+  ordem int not null default 0
+);
+
+alter table programacao enable row level security;
+alter table duvidas     enable row level security;
+
+drop policy if exists "programacao de evento publicado" on programacao;
+create policy "programacao de evento publicado" on programacao
+  for select using (
+    exists (select 1 from eventos e where e.id = evento_id and (e.publicado or eh_diretoria()))
+  );
+
+drop policy if exists "diretoria edita programacao" on programacao;
+create policy "diretoria edita programacao" on programacao
+  for all using (eh_diretoria()) with check (eh_diretoria());
+
+drop policy if exists "duvidas publicas" on duvidas;
+create policy "duvidas publicas" on duvidas for select using (true);
+
+drop policy if exists "diretoria edita duvidas" on duvidas;
+create policy "diretoria edita duvidas" on duvidas
+  for all using (eh_diretoria()) with check (eh_diretoria());
