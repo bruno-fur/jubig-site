@@ -7,6 +7,27 @@
  * procurando a causa de um "Internal Server Error" sem texto.
  */
 export function SemConfiguracao({ faltando }: { faltando: string[] }) {
+  /*
+   * Os nomes (nunca os valores) das variáveis que este build realmente
+   * enxergou com SUPABASE no nome.
+   *
+   * É o que separa as três causas possíveis, que de fora são idênticas:
+   *   nome aparece diferente  -> erro de digitação no painel
+   *   nenhum nome aparece     -> variável foi para outro projeto ou escopo
+   *   nome aparece igual      -> a variável existe mas está vazia
+   *
+   * Nome de variável não é segredo, e a lista só aparece enquanto o site
+   * estiver sem configuração — ou seja, enquanto não funciona de qualquer jeito.
+   */
+  /*
+   * O filtro é frouxo de propósito. Procurar por "SUPABASE" não encontraria
+   * "SUPBASE", que é exatamente o erro de digitação que se quer flagrar — o
+   * nome errado some da lista e a tela volta a não explicar nada.
+   */
+  const vistas = Object.keys(process.env)
+    .filter((k) => /SUP|BASE|ANON|SERVICE_ROLE/i.test(k))
+    .sort();
+
   return (
     <html lang="pt-BR">
       <body
@@ -45,7 +66,40 @@ export function SemConfiguracao({ faltando }: { faltando: string[] }) {
               </li>
             ))}
           </ul>
+          <p style={{ margin: "0 0 10px", lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
+            O que este build <strong>enxergou</strong> com SUPABASE no nome:
+          </p>
+          <ul
+            style={{
+              margin: "0 0 20px",
+              padding: "14px 18px",
+              background: "#fff",
+              border: "1px solid #E0D3BC",
+              borderRadius: 10,
+              listStyle: "none",
+              fontFamily: "ui-monospace, monospace",
+              fontSize: 14,
+            }}
+          >
+            {vistas.length === 0 ? (
+              <li style={{ color: "#C0392B" }}>
+                nenhuma — as variáveis não chegaram a este projeto
+              </li>
+            ) : (
+              vistas.map((v) => (
+                <li key={v} style={{ padding: "3px 0" }}>
+                  {v}
+                </li>
+              ))
+            )}
+          </ul>
+
           <p style={{ margin: 0, lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
+            Se um nome acima estiver escrito diferente do esperado, é erro de digitação no painel.
+            Se a lista estiver vazia, as variáveis foram salvas em outro projeto ou escopo. Se os
+            nomes baterem, a variável existe mas está com valor vazio.
+          </p>
+          <p style={{ margin: "10px 0 0", lineHeight: 1.6, color: "#7A6350", fontSize: 14 }}>
             Na Vercel: Settings → Environment Variables. Elas são congeladas no build, então{" "}
             <strong>é preciso um novo deploy</strong> depois de salvar — recarregar a página não
             resolve.
