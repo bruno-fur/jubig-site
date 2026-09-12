@@ -95,6 +95,43 @@ await naoVaza("diretoria");
   error ? ok(`criar_inscricao negada para anônimo (${error.code ?? "erro"})`) : falha("criar_inscricao", "rodou sem login");
 }
 
+/*
+ * Segunda parte, só se a chave secret estiver no ambiente: confere o que a
+ * diretoria precisa e que o papel anônimo nunca alcança. São as três coisas
+ * que só falhariam em produção, na frente de alguém esperando aprovação.
+ */
+const secret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+if (!secret) {
+  console.log("\n(sem SUPABASE_SERVICE_ROLE_KEY: pulei as checagens da diretoria)");
+} else {
+  console.log("\n--- caminho da diretoria (chave secret) ---");
+  const admin = createClient(url, secret, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  {
+    const { error } = await admin.from("inscricoes").select("id").limit(1);
+    error ? falha("secret lê inscricoes", error.message) : ok("secret lê inscricoes ignorando a RLS");
+  }
+
+  {
+    // É como a diretoria abre o comprovante sem tornar o bucket público.
+    const { data, error } = await admin.storage
+      .from("comprovantes")
+      .createSignedUrl("teste/inexistente.jpg", 60);
+    if (data?.signedUrl) ok("signed URL gerada");
+    else if (/not.*found|Object not found/i.test(error?.message ?? ""))
+      ok("signed URL funciona (arquivo de teste não existe, como esperado)");
+    else falha("signed URL", error?.message ?? "sem url e sem erro");
+  }
+
+  {
+    // Usado em api/admin/validar para achar o e-mail de quem se inscreveu.
+    const { error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
+    error ? falha("auth.admin", error.message) : ok("auth.admin responde (e-mail do responsável)");
+  }
+}
+
 console.log(
   falhas === 0
     ? "\nNenhum vazamento. A RLS está no ar."
