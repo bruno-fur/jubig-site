@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { pegarSessao } from "@/lib/sessao";
-
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+import { urlDoSite } from "@/lib/site";
 
 /**
  * Reenvia o e-mail de confirmação.
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
-    options: { emailRedirectTo: `${SITE}/auth/callback?proximo=/confirmado` },
+    options: { emailRedirectTo: `${urlDoSite()}/auth/callback?proximo=/confirmado` },
   });
 
   if (error) {

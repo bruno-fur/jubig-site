@@ -1,6 +1,5 @@
 import { layout, texto, caixaDados, selo, CORES } from "./layout.ts";
-
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jubig.vercel.app";
+import { urlDoSite } from "../lib/site.ts";
 
 export type DadosInscricao = {
   nome: string;
@@ -55,7 +54,7 @@ export function emailInscricaoRecebida(d: DadosInscricao) {
           `${selo("Aguardando pagamento", CORES.laranjaEscuro, "#FBE6D5")}`,
           "<strong>Sua vaga ainda não está garantida.</strong> Faça o PIX e envie a foto do comprovante pelo site — a diretoria confere e confirma.",
         ),
-      botao: { texto: "Pagar e enviar comprovante", url: `${SITE}/inscricoes/${d.codigo}` },
+      botao: { texto: "Pagar e enviar comprovante", url: `${urlDoSite()}/inscricoes/${d.codigo}` },
       rodapeWhatsApp: `Olá! Sou ${d.nome}, inscrição ${d.codigo}.`,
     }),
   };
@@ -79,7 +78,7 @@ export function emailComprovanteRecebido(d: DadosInscricao) {
           ["Situação", "Em análise"],
         ]) +
         texto("Costuma levar até 48 horas. Você recebe um e-mail assim que houver resposta — não precisa enviar de novo."),
-      botao: { texto: "Acompanhar inscrição", url: `${SITE}/minhas-inscricoes` },
+      botao: { texto: "Acompanhar inscrição", url: `${urlDoSite()}/minhas-inscricoes` },
       rodapeWhatsApp: `Olá! Enviei o comprovante da inscrição ${d.codigo}.`,
     }),
   };
@@ -106,7 +105,7 @@ export function emailInscricaoAprovada(d: DadosInscricao) {
           `${selo("Confirmada", "#1F5C2C", "#DFF0E2")}`,
           "Leve este código na chegada — é o que agiliza o credenciamento.",
         ),
-      botao: { texto: "Ver minha inscrição", url: `${SITE}/minhas-inscricoes` },
+      botao: { texto: "Ver minha inscrição", url: `${urlDoSite()}/minhas-inscricoes` },
       rodapeWhatsApp: `Olá! Minha inscrição ${d.codigo} foi confirmada.`,
     }),
   };
@@ -132,7 +131,7 @@ export function emailComprovanteRecusado(d: DadosInscricao, motivo: string) {
           "<strong>Seus dados continuam salvos.</strong> É só enviar um novo comprovante — não precisa preencher tudo de novo nem pagar outra vez.",
           "Se você tem certeza de que o pagamento foi feito, chama a diretoria no WhatsApp com o comprovante em mãos.",
         ),
-      botao: { texto: "Enviar outro comprovante", url: `${SITE}/inscricoes/${d.codigo}` },
+      botao: { texto: "Enviar outro comprovante", url: `${urlDoSite()}/inscricoes/${d.codigo}` },
       rodapeWhatsApp: `Olá! Meu comprovante da inscrição ${d.codigo} foi recusado, mas fiz o pagamento.`,
     }),
   };

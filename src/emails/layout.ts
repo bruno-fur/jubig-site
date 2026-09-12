@@ -1,6 +1,7 @@
+import { urlDoSite } from "../lib/site.ts";
+
 type Estado = "feliz" | "joia" | "nao" | "nervoso" | "choro" | "choque" | "heh" | "susto";
 
-const ASSETS = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jubig.vercel.app";
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export const CORES = {
@@ -30,6 +31,9 @@ type LayoutProps = {
 
 /** Layout base em tabela: é o único jeito que funciona bem no Gmail, Outlook e Apple Mail. */
 export function layout({ preheader, estado, titulo, corpo, botao, rodapeWhatsApp }: LayoutProps) {
+  // Resolvido aqui, não no topo do arquivo: o script que gera o template do
+  // Supabase precisa apontar para produção, e a env dele só existe em runtime.
+  const ASSETS = urlDoSite();
   const wa = linkWhatsApp(rodapeWhatsApp ?? "Olá! Tenho uma dúvida sobre minha inscrição na JUBIG.");
   return `<!DOCTYPE html>
 <html lang="pt-BR">

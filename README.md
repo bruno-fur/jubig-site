@@ -80,8 +80,13 @@ Usuário: resend          Senha: sua RESEND_API_KEY
 Depois, em **Authentication → Emails → Confirm signup**, cole o HTML gerado por:
 
 ```bash
-npm run email:confirmacao     # escreve supabase/email-confirmacao.html
+npm run email:confirmacao -- https://SEU-DOMINIO
 ```
+
+A URL é obrigatória porque entra no `src` da figurinha do Juca dentro do
+e-mail. O script recusa localhost de propósito: esse HTML só vai para o painel
+do Supabase, que dispara e-mail de verdade, e imagem quebrada na caixa de
+entrada não tem conserto depois do envio.
 
 Sem colar isso, o e-mail de confirmação sai com o texto padrão do Supabase —
 sem o Juca e sem o tom do resto do site.
@@ -91,7 +96,7 @@ sem o Juca e sem o tom do resto do site.
 `.env.local` na sua máquina e as mesmas variáveis na Vercel:
 
 ```
-NEXT_PUBLIC_SITE_URL
+NEXT_PUBLIC_SITE_URL                # https://jubig-site.vercel.app
 NEXT_PUBLIC_WHATSAPP_DIRETORIA      # 5545999999999
 NEXT_PUBLIC_INSTAGRAM
 NEXT_PUBLIC_SUPABASE_URL
@@ -100,6 +105,14 @@ SUPABASE_SERVICE_ROLE_KEY           # só servidor, nunca em "use client"
 RESEND_API_KEY
 EMAIL_REMETENTE                     # JUBIG <contato@jubig.org.br>
 ```
+
+As `NEXT_PUBLIC_*` são **congeladas no build**. Mudar qualquer uma delas na
+Vercel não tem efeito nenhum até um novo deploy — não adianta só salvar e
+recarregar a página.
+
+Se `NEXT_PUBLIC_SITE_URL` faltar, `src/lib/site.ts` cai na URL de produção que
+a própria Vercel injeta. Funciona, mas prefira declarar: no dia em que entrar
+um domínio próprio, é essa variável que manda.
 
 No Resend, o domínio do `EMAIL_REMETENTE` precisa estar verificado (SPF e
 DKIM), senão o Gmail manda tudo para spam.

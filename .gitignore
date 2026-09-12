@@ -17,3 +17,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 .vercel
+
+# gerado por npm run email:confirmacao, com a URL do ambiente
+supabase/email-confirmacao.html
