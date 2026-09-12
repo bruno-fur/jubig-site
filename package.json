@@ -12,7 +12,8 @@
     "testar:schema": "node scripts/testar-schema.mjs",
     "ler:qr": "node scripts/ler-qr.mjs",
     "testar:email": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-email.mts",
-    "testar:supabase": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-supabase.mts"
+    "testar:supabase": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-supabase.mts",
+    "evento": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/evento.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
