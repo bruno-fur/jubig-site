@@ -12,8 +12,21 @@
  *
  * `--dry` mostra o que faria sem mandar nada.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+
+/*
+ * Precisa de shell: no Windows o Node recusa executar npx.cmd sem ele. Mas o
+ * shell junta os argumentos por espaço, então cada um vai entre aspas — sem
+ * isso a senha de app do Gmail, que vem em quatro blocos separados por espaço,
+ * chega ao CLI como quatro argumentos e ele recusa o comando.
+ */
+const aspas = (a) => {
+  if (a.includes('"')) throw new Error(`valor com aspas não suportado: ${a}`);
+  return /\s/.test(a) ? `"${a}"` : a;
+};
+const rodar = (args) =>
+  spawnSync(["npx", ...args].map(aspas).join(" "), { encoding: "utf8", shell: true });
 
 const args = process.argv.slice(2);
 const opcao = (nome) => {
@@ -81,10 +94,7 @@ const autenticacao = [
 ];
 
 if (!ensaio) {
-  const quem = spawnSync("npx", ["vercel", "whoami", ...autenticacao], {
-    encoding: "utf8",
-    shell: true,
-  });
+  const quem = rodar(["vercel", "whoami", ...autenticacao]);
   if (quem.status !== 0) {
     console.error(
       "O CLI da Vercel não está autenticado. Escolha um:\n" +
@@ -119,7 +129,7 @@ for (const nome of NOMES) {
       continue;
     }
 
-    const r = spawnSync("npx", comando, { encoding: "utf8", shell: true });
+    const r = rodar(comando);
     if (r.status !== 0) {
       console.error(`falhou ${nome} (${alvo}): ${(r.stderr || r.stdout).trim().split("\n").pop()}`);
       process.exit(1);
