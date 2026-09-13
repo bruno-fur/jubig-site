@@ -774,4 +774,85 @@ begin
   raise notice 'ok    aviso de evento publicado visivel para todos';
 end $$;
 
+-- ============================================================
+-- Cancelamento
+-- ============================================================
+set role authenticated;
+
+-- Outra pessoa não cancela, e nem descobre que o código existe.
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+do $$
+declare r text;
+begin
+  r := cancelar_inscricao('JD-0002', null);
+  if r <> 'nao_encontrada' then raise exception 'FALHOU — outro usuario cancelou inscricao alheia: %', r; end if;
+  raise notice 'ok    outra pessoa nao cancela inscricao alheia';
+end $$;
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+-- Dono não cancela a que já foi paga e confirmada.
+do $$
+declare r text;
+begin
+  r := cancelar_inscricao('JD-0001', 'desisti');
+  if r <> 'fale_com_diretoria' then raise exception 'FALHOU — dono cancelou inscricao paga: %', r; end if;
+  raise notice 'ok    dono nao cancela inscricao ja paga';
+end $$;
+
+-- Dono cancela a pendente; a vaga da modalidade e o CPF voltam.
+do $$
+declare v_codigo text; r text; v_restantes int;
+begin
+  select i.codigo into v_codigo
+    from inscricoes i join inscritos ins on ins.inscricao_id = i.id
+   where ins.nome = 'Primeiro Xadrez';
+
+  r := cancelar_inscricao(v_codigo, null);
+  if r <> 'ok' then raise exception 'FALHOU — dono nao cancelou a propria pendente: %', r; end if;
+  raise notice 'ok    dono cancela a propria inscricao pendente';
+
+  if (select ativo from inscritos where nome = 'Primeiro Xadrez') then
+    raise exception 'FALHOU — inscrito continuou ativo depois de cancelar';
+  end if;
+  raise notice 'ok    inscritos da inscricao cancelada ficam inativos';
+
+  select restantes into v_restantes from vagas_por_esporte where nome = 'Xadrez';
+  if v_restantes <> 1 then raise exception 'FALHOU — vaga do xadrez nao voltou (restantes=%)', v_restantes; end if;
+  raise notice 'ok    vaga da modalidade volta ao cancelar';
+
+  r := cancelar_inscricao(v_codigo, null);
+  if r <> 'ja_cancelada' then raise exception 'FALHOU — segundo cancelamento veio %', r; end if;
+  raise notice 'ok    cancelar duas vezes responde ja_cancelada';
+end $$;
+
+do $$
+declare v_xadrez uuid; v_codigo text;
+begin
+  select id into v_xadrez from esportes where nome = 'Xadrez';
+  v_codigo := criar_inscricao('jubigday-2026', 1, jsonb_build_array(jsonb_build_object(
+    'nome','Primeiro Xadrez De Novo','cpf','11144477735','nascimento','2000-01-01',
+    'igreja','PIB Assis','deBoa',false,'esportes', jsonb_build_array(v_xadrez))));
+  raise notice 'ok    mesmo CPF se inscreve de novo depois de cancelar, na mesma vaga (%)', v_codigo;
+end $$;
+
+-- Diretoria cancela a de outra pessoa, mas precisa dizer por quê.
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$
+declare r text;
+begin
+  r := cancelar_inscricao('JD-0002', '  ');
+  if r <> 'motivo_obrigatorio' then raise exception 'FALHOU — diretoria cancelou sem motivo: %', r; end if;
+  raise notice 'ok    diretoria precisa de motivo para cancelar a de outra pessoa';
+
+  r := cancelar_inscricao('jd-0002', 'Pediu cancelamento pelo WhatsApp');
+  if r <> 'ok' then raise exception 'FALHOU — diretoria nao cancelou: %', r; end if;
+  raise notice 'ok    diretoria cancela inscricao de outra pessoa com motivo';
+
+  if (select motivo_cancelamento from inscricoes where codigo = 'JD-0002') is null then
+    raise exception 'FALHOU — motivo do cancelamento nao ficou gravado';
+  end if;
+  raise notice 'ok    motivo e autor do cancelamento ficam gravados';
+end $$;
+
 select 'TODOS OS TESTES PASSARAM' as resultado;

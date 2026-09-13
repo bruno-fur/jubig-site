@@ -132,10 +132,20 @@ create table if not exists inscritos (
 );
 create index if not exists inscritos_inscricao on inscritos (inscricao_id);
 
--- Mesmo CPF não entra duas vezes no mesmo evento.
--- Índice simples sobre coluna: subquery dentro de índice o Postgres recusa.
-create unique index if not exists inscrito_unico_por_evento
-  on inscritos (evento_id, cpf);
+/*
+ * `ativo` cai para false quando a inscrição é cancelada.
+ *
+ * Existe porque índice não pode olhar outra tabela: sem esta coluna, o CPF de
+ * uma inscrição cancelada continuaria travado e a pessoa não conseguiria se
+ * inscrever de novo no mesmo evento.
+ */
+alter table inscritos add column if not exists ativo boolean not null default true;
+
+-- Mesmo CPF não entra duas vezes no mesmo evento — entre inscrições ativas.
+-- Recriado sempre: bancos antigos têm a versão sem o `where ativo`.
+drop index if exists inscrito_unico_por_evento;
+create unique index inscrito_unico_por_evento
+  on inscritos (evento_id, cpf) where ativo;
 
 create table if not exists inscritos_esportes (
   inscrito_id uuid references inscritos on delete cascade,
@@ -330,7 +340,11 @@ begin
     end if;
   end if;
 
-  select count(*) into v_ocupadas from inscritos_esportes where esporte_id = new.esporte_id;
+  -- Conta só inscrição ativa: cancelada não segura vaga de ninguém.
+  select count(*) into v_ocupadas
+    from inscritos_esportes ie
+    join inscritos ins on ins.id = ie.inscrito_id
+   where ie.esporte_id = new.esporte_id and ins.ativo;
   if v_ocupadas >= v_vagas then
     raise exception 'modalidade lotada';
   end if;
@@ -357,7 +371,9 @@ with (security_invoker = false) as
          greatest(e.vagas - count(ie.inscrito_id), 0)::int as restantes
     from esportes e
     join eventos ev on ev.id = e.evento_id
+    -- Só escolhas de inscrição ativa ocupam vaga: cancelou, a vaga volta.
     left join inscritos_esportes ie on ie.esporte_id = e.id
+      and exists (select 1 from inscritos ins where ins.id = ie.inscrito_id and ins.ativo)
    -- A view roda como dona, então não passa pela RLS da tabela esportes.
    -- Sem este filtro, a modalidade de um evento ainda não publicado
    -- apareceria para qualquer visitante anônimo.
@@ -1174,3 +1190,66 @@ create table if not exists lembretes_enviados (
   primary key (evento_id, user_id, tipo)
 );
 alter table lembretes_enviados enable row level security;
+
+-- ============================================================
+-- Cancelamento
+--
+-- Quem pode cancelar:
+--   dono      — enquanto não pagou (aguardando, em análise, recusada)
+--   diretoria — qualquer uma, com motivo obrigatório quando não é dela
+--
+-- Dono não cancela inscrição confirmada porque ali tem dinheiro pago e
+-- devolução é manual: cancelar sozinho tiraria a vaga sem ninguém da
+-- diretoria saber que precisa devolver o PIX.
+-- ============================================================
+alter table inscricoes add column if not exists cancelada_em timestamptz;
+alter table inscricoes add column if not exists cancelada_por uuid references auth.users;
+alter table inscricoes add column if not exists motivo_cancelamento text;
+
+-- Inscrições canceladas antes desta coluna existir.
+update inscritos ins set ativo = false
+  from inscricoes i
+ where i.id = ins.inscricao_id and i.status = 'cancelada' and ins.ativo;
+
+create or replace function cancelar_inscricao(p_codigo text, p_motivo text) returns text
+language plpgsql security definer set search_path = public as $fn$
+declare
+  v_id uuid; v_dono uuid; v_status status_inscricao; v_diretoria boolean;
+  v_motivo text := nullif(trim(coalesce(p_motivo, '')), '');
+begin
+  select id, responsavel_id, status into v_id, v_dono, v_status
+    from inscricoes where codigo = upper(trim(p_codigo))
+    for update;
+
+  v_diretoria := eh_diretoria();
+
+  -- Inscrição de outra pessoa responde igual à inexistente: não confirma
+  -- para quem não é da diretoria que aquele código existe.
+  if v_id is null or (not v_diretoria and v_dono <> auth.uid()) then
+    return 'nao_encontrada';
+  end if;
+
+  if v_status = 'cancelada' then return 'ja_cancelada'; end if;
+
+  if not v_diretoria and v_status = 'confirmada' then
+    return 'fale_com_diretoria';
+  end if;
+
+  if v_diretoria and v_dono <> auth.uid() and (v_motivo is null or length(v_motivo) < 5) then
+    return 'motivo_obrigatorio';
+  end if;
+
+  update inscricoes
+     set status = 'cancelada',
+         cancelada_em = now(),
+         cancelada_por = auth.uid(),
+         motivo_cancelamento = v_motivo
+   where id = v_id;
+
+  update inscritos set ativo = false where inscricao_id = v_id;
+
+  return 'ok';
+end $fn$;
+
+revoke all on function cancelar_inscricao(text, text) from public, anon;
+grant execute on function cancelar_inscricao(text, text) to authenticated;

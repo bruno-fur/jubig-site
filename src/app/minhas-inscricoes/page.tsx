@@ -32,6 +32,14 @@ export default async function MinhasInscricoes() {
   const { data } = await supabase
     .from("inscricoes")
     .select("*, eventos(*), inscritos(*, inscritos_esportes(esporte_id)), comprovantes(*)")
+    /*
+     * Filtro explícito pelo dono, além da RLS.
+     *
+     * A RLS entrega a quem é da diretoria as inscrições de todo mundo — é o que
+     * o painel precisa. Confiando só nela, esta tela, que se chama "minhas",
+     * mostrava para a diretoria as de todos os usuários.
+     */
+    .eq("responsavel_id", sessao.userId)
     .order("criado_em", { ascending: false });
 
   const inscricoes = (data ?? []) as Linha[];
@@ -67,7 +75,8 @@ export default async function MinhasInscricoes() {
           const prazoTroca = prazoDeTroca(i.eventos);
           const podeTrocar = hojeISO() <= prazoTroca && i.status !== "cancelada";
           const pagos = i.comprovantes.filter((c) => c.aprovado !== false).length;
-          const faltaComprovante = pagos < i.parcelas;
+          // Cancelada não cobra mais nada: sem botão de pagar.
+          const faltaComprovante = pagos < i.parcelas && i.status !== "cancelada";
 
           return (
             <article key={i.id} className="cartao overflow-hidden">

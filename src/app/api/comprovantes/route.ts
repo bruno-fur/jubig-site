@@ -44,6 +44,8 @@ export async function POST(req: Request) {
     .eq("responsavel_id", sessao.userId)
     .maybeSingle();
   if (!inscricao) return NextResponse.json({ erro: "inscricao_nao_encontrada" }, { status: 404 });
+  if (inscricao.status === "cancelada")
+    return NextResponse.json({ erro: "inscricao_cancelada" }, { status: 409 });
 
   if (!Number.isInteger(parcela) || parcela < 1 || parcela > inscricao.parcelas)
     return NextResponse.json({ erro: "parcela_invalida" }, { status: 400 });

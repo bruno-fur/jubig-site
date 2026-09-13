@@ -1,10 +1,14 @@
 import Link from "next/link";
-import { ehDiretoria, type Sessao } from "@/lib/sessao";
+import { papelDe, type Sessao } from "@/lib/sessao";
+import { contarPendencias } from "@/lib/pendencias";
 import { MenuConta } from "./MenuConta";
 import { LinkNav } from "./LinkNav";
+import { AvisoPendencias } from "./AvisoPendencias";
 
 export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
-  const diretoria = sessao ? await ehDiretoria(sessao.userId) : false;
+  const papel = sessao ? await papelDe(sessao.userId) : null;
+  // Aviso de pendência é da diretoria: usuário comum não gasta essa consulta.
+  const pendencias = papel ? await contarPendencias(papel === "admin") : null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-linha bg-creme/90 backdrop-blur print:hidden">
@@ -23,12 +27,26 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
         <nav className="ml-auto flex items-center gap-1 text-sm">
           {sessao ? (
             <>
-              <LinkNav href="/minhas-inscricoes" className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta">
+              <LinkNav
+                href="/minhas-inscricoes"
+                className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
+              >
                 Minhas inscrições
               </LinkNav>
-              {diretoria && (
-                <LinkNav href="/diretoria" className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta">
+              {papel && (
+                <LinkNav
+                  href="/diretoria"
+                  className="relative rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
+                >
                   Diretoria
+                  {pendencias && pendencias.comprovantes > 0 && (
+                    <span
+                      aria-label={`${pendencias.comprovantes} comprovantes para aprovar`}
+                      className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-laranja px-1.5 text-[11px] leading-5 font-bold text-white"
+                    >
+                      {pendencias.comprovantes > 99 ? "99+" : pendencias.comprovantes}
+                    </span>
+                  )}
                 </LinkNav>
               )}
               <MenuConta email={sessao.email} nome={sessao.nome} />
@@ -48,6 +66,8 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
           )}
         </nav>
       </div>
+
+      {pendencias && <AvisoPendencias comprovantes={pendencias.comprovantes} />}
     </header>
   );
 }

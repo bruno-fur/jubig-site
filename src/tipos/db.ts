@@ -85,6 +85,9 @@ export type Inscricao = {
   parcelas: number;
   valor_centavos: number;
   motivo_recusa: string | null;
+  cancelada_em: string | null;
+  cancelada_por: string | null;
+  motivo_cancelamento: string | null;
   criado_em: string;
   atualizado_em: string;
 };

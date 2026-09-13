@@ -174,6 +174,20 @@ garante que sempre sobre ao menos um admin.
       com ou sem conta**: dizer "e-mail não encontrado" deixa qualquer um
       descobrir quem está cadastrado.
 
+### 7. Controle e cancelamento
+- [x] `/minhas-inscricoes` filtra por `responsavel_id` **explicitamente**: a RLS
+      devolve tudo para a diretoria, então confiar nela mostrava as de todo mundo
+- [x] Diretoria > Inscrições: todas, com busca e filtro; detalhe com comprovantes
+- [x] Comprovantes continuam visíveis depois de aprovados ou recusados (histórico)
+- [x] Cancelamento (`cancelar_inscricao`): o dono cancela a própria **enquanto
+      não está paga**; paga, só a diretoria (devolução é manual). Diretoria
+      cancelando a de outra pessoa exige motivo e avisa o dono por e-mail.
+      Cancelar marca `inscritos.ativo = false`, o que libera a vaga da
+      modalidade e o CPF para nova inscrição
+- [x] Aviso de pendências no site para a diretoria (selo no menu + faixa), sem e-mail
+- [x] Área do admin (Diretoria > Usuários): pendências do sistema, reenviar
+      confirmação, confirmar e-mail à mão
+
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 

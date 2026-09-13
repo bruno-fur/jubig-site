@@ -19,6 +19,7 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
 
   const abas = [
     { href: "/diretoria", titulo: "Visão geral", soAdmin: false },
+    { href: "/diretoria/inscricoes", titulo: "Inscrições", soAdmin: false },
     { href: "/diretoria/portaria", titulo: "Portaria", soAdmin: false },
     { href: "/diretoria/avisos", titulo: "Avisos", soAdmin: true },
     { href: "/diretoria/modalidades", titulo: "Modalidades", soAdmin: true },

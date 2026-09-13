@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     .eq("codigo", codigo.toUpperCase())
     .maybeSingle();
   if (!inscricao) return NextResponse.json({ erro: "nao_encontrada" }, { status: 404 });
+  // Aprovar pagamento de inscrição cancelada reativaria uma vaga que já foi embora.
+  if (inscricao.status === "cancelada")
+    return NextResponse.json({ erro: "inscricao_cancelada" }, { status: 409 });
 
   const pendentes = inscricao.comprovantes.filter(
     (c: { aprovado: boolean | null }) => c.aprovado === null

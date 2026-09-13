@@ -30,8 +30,10 @@ export default async function VisaoGeral() {
     supabase.from("painel_igrejas").select("*").order("pessoas", { ascending: false }),
     supabase
       .from("comprovantes")
-      .select("*, inscricoes(*, eventos(*), inscritos(*))")
+      // !inner para poder filtrar pela inscrição: cancelada sai da fila.
+      .select("*, inscricoes!inner(*, eventos(*), inscritos(*))")
       .is("aprovado", null)
+      .neq("inscricoes.status", "cancelada")
       .order("enviado_em", { ascending: true }),
     eventosPublicados(),
   ]);

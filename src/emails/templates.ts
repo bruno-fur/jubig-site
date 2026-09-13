@@ -256,3 +256,40 @@ export function emailLembrete(nome: string, tipo: "semana" | "vespera", d: Dados
 function escapar(t: string) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+
+export type DadosCancelamento = {
+  codigo: string;
+  evento: string;
+  slug: string;
+  data: string;
+  motivo: string;
+  estavaPaga: boolean;
+};
+
+/** 8. A diretoria cancelou a inscrição. */
+export function emailInscricaoCancelada(nome: string, d: DadosCancelamento) {
+  const primeiro = nome.trim().split(" ")[0];
+  return {
+    subject: `Inscrição ${d.codigo} cancelada`,
+    html: layout({
+      preheader: `A diretoria cancelou sua inscrição no ${escapar(d.evento)}.`,
+      estado: "choro",
+      titulo: "Sua inscrição foi cancelada",
+      corpo:
+        texto(
+          `${primeiro ? `${escapar(primeiro)}, a` : "A"} diretoria cancelou a inscrição <strong>${escapar(d.codigo)}</strong> no ${escapar(d.evento)} (${escapar(d.data)}).`,
+        ) +
+        caixaDados([
+          ["Código", d.codigo],
+          ["Motivo", d.motivo || "não informado"],
+        ]) +
+        texto(
+          d.estavaPaga
+            ? "<strong>Essa inscrição já estava paga.</strong> Fale com a diretoria no WhatsApp para combinar a devolução do PIX."
+            : "Se foi engano, é só falar com a diretoria ou fazer uma nova inscrição pelo site.",
+        ),
+      botao: { texto: "Ver o evento", url: `${urlDoSite()}/${d.slug}` },
+      rodapeWhatsApp: `Olá! Minha inscrição ${d.codigo} foi cancelada e queria entender.`,
+    }),
+  };
+}

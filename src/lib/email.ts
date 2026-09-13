@@ -9,9 +9,11 @@ import {
   emailRedefinirSenha,
   emailAviso,
   emailLembrete,
+  emailInscricaoCancelada,
   type DadosInscricao,
   type DadosAviso,
   type DadosLembrete,
+  type DadosCancelamento,
 } from "@/emails/templates";
 
 /*
@@ -101,4 +103,7 @@ export const Emails = {
 
   lembrete: (para: string, nome: string, tipo: "semana" | "vespera", d: DadosLembrete) =>
     enviar(para, emailLembrete(nome, tipo, d)),
+
+  inscricaoCancelada: (para: string, nome: string, d: DadosCancelamento) =>
+    enviar(para, emailInscricaoCancelada(nome, d)),
 };
