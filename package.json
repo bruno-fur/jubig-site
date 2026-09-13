@@ -14,7 +14,8 @@
     "testar:supabase": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-supabase.mts",
     "evento": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/evento.mts",
     "vercel:env": "node scripts/vercel-env.mjs",
-    "testar:cadastro": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-cadastro.mts"
+    "testar:cadastro": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-cadastro.mts",
+    "semear": "node --env-file-if-exists=.env.local scripts/semear.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
