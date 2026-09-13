@@ -5,7 +5,7 @@ const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubig.oficial";
 
 export function Rodape() {
   return (
-    <footer className="mt-16 border-t border-linha bg-tinta text-creme">
+    <footer className="mt-16 border-t border-linha bg-tinta text-creme print:hidden">
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 sm:grid-cols-3">
         <div>
           {/* Versão branca: o rodapé é escuro e a laranja some no fundo tinta. */}

@@ -617,4 +617,161 @@ update eventos set publicado = false
 set role authenticated;
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 
+-- ============================================================
+-- Ingresso e check-in
+-- ============================================================
+set role postgres;
+do $$
+declare v_ing uuid; v_outro uuid;
+begin
+  select ingresso into v_ing from inscritos where nome = 'Bruno Furtado';
+  select ingresso into v_outro from inscritos where nome = 'Maria Souza';
+  if v_ing is null or v_ing = v_outro then
+    raise exception 'FALHOU — cada inscrito deveria ter ingresso proprio';
+  end if;
+  raise notice 'ok    cada pessoa da caravana tem ingresso proprio';
+end $$;
+
+-- O dono não mexe no próprio check-in.
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  perform espera_erro(
+    $x$ update inscritos set checkin_em = now() where nome = 'Bruno Furtado' $x$,
+    'ingresso_protegido', 'dono nao registra a propria entrada');
+  perform espera_erro(
+    $x$ update inscritos set ingresso = gen_random_uuid() where nome = 'Bruno Furtado' $x$,
+    'ingresso_protegido', 'dono nao troca o proprio ingresso');
+end $$;
+
+-- Usuário comum não faz check-in de ninguém.
+do $$
+declare v_ing uuid; v_r text;
+begin
+  select ingresso into v_ing from inscritos where nome = 'Bruno Furtado';
+  v_r := registrar_checkin(v_ing);
+  if v_r <> 'sem_permissao' then raise exception 'FALHOU — usuario comum fez checkin: %', v_r; end if;
+  raise notice 'ok    usuario comum nao faz checkin';
+end $$;
+
+-- Membro da diretoria faz, uma vez só.
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$
+declare v_ing uuid; v_r text;
+begin
+  select ingresso into v_ing from inscritos where nome = 'Bruno Furtado';
+
+  v_r := registrar_checkin(v_ing);
+  if v_r <> 'ok' then raise exception 'FALHOU checkin — veio %', v_r; end if;
+  raise notice 'ok    diretoria registra a entrada';
+
+  v_r := registrar_checkin(v_ing);
+  if v_r <> 'ja_entrou' then raise exception 'FALHOU — segunda leitura deveria ser ja_entrou, veio %', v_r; end if;
+  raise notice 'ok    o mesmo ingresso nao entra duas vezes';
+
+  v_r := registrar_checkin(gen_random_uuid());
+  if v_r <> 'nao_encontrado' then raise exception 'FALHOU — ingresso inventado veio %', v_r; end if;
+  raise notice 'ok    ingresso inventado recusado';
+end $$;
+
+-- Inscrição não confirmada não entra.
+do $$
+declare v_ing uuid; v_r text;
+begin
+  select ins.ingresso into v_ing
+    from inscritos ins join inscricoes i on i.id = ins.inscricao_id
+   where i.status <> 'confirmada' limit 1;
+  if v_ing is null then
+    raise notice 'ok    (sem inscricao pendente no cenario para testar nao_confirmada)';
+    return;
+  end if;
+  v_r := registrar_checkin(v_ing);
+  if v_r <> 'nao_confirmada' then raise exception 'FALHOU — pendente entrou: %', v_r; end if;
+  raise notice 'ok    inscricao nao confirmada nao entra';
+end $$;
+
+-- ============================================================
+-- Redefinição de senha
+-- ============================================================
+set role postgres;
+do $$
+declare v_token uuid; v_usuario uuid;
+begin
+  if usuario_por_email('  CONFIRMADO@teste.com ') <> '11111111-1111-1111-1111-111111111111' then
+    raise exception 'FALHOU — usuario_por_email deveria ignorar caixa e espaco';
+  end if;
+  raise notice 'ok    acha a conta pelo e-mail sem diferenciar maiuscula';
+
+  if usuario_por_email('ninguem@teste.com') is not null then
+    raise exception 'FALHOU — e-mail inexistente deveria voltar nulo';
+  end if;
+  raise notice 'ok    e-mail inexistente volta nulo';
+
+  insert into redefinicoes_senha (user_id) values ('11111111-1111-1111-1111-111111111111')
+  returning token into v_token;
+
+  v_usuario := consumir_redefinicao(v_token);
+  if v_usuario <> '11111111-1111-1111-1111-111111111111' then
+    raise exception 'FALHOU — token valido deveria devolver o usuario';
+  end if;
+  raise notice 'ok    token valido devolve o dono';
+
+  if consumir_redefinicao(v_token) is not null then
+    raise exception 'FALHOU — token usado duas vezes';
+  end if;
+  raise notice 'ok    token de senha nao serve duas vezes';
+
+  insert into redefinicoes_senha (user_id, expira_em)
+  values ('11111111-1111-1111-1111-111111111111', now() - interval '1 minute')
+  returning token into v_token;
+  if consumir_redefinicao(v_token) is not null then
+    raise exception 'FALHOU — token vencido aceito';
+  end if;
+  raise notice 'ok    token de senha vencido recusado';
+end $$;
+
+-- Ninguém de fora chama as funções de conta.
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  perform espera_erro($x$ select usuario_por_email('confirmado@teste.com') $x$,
+    'permission denied', 'usuario_por_email fechada para usuario comum');
+  perform espera_erro($x$ select consumir_redefinicao(gen_random_uuid()) $x$,
+    'permission denied', 'consumir_redefinicao fechada para usuario comum');
+end $$;
+
+-- ============================================================
+-- Avisos
+-- ============================================================
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$
+declare v_evento uuid;
+begin
+  select id into v_evento from eventos where slug = 'jubigday-2026';
+  perform espera_erro(
+    format($x$ insert into avisos (evento_id, titulo, mensagem) values (%L, 'x', 'y') $x$, v_evento),
+    'row-level security', 'membro nao publica aviso');
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare v_evento uuid;
+begin
+  select id into v_evento from eventos where slug = 'jubigday-2026';
+  insert into avisos (evento_id, titulo, mensagem) values (v_evento, 'Mudou o local', 'Agora e no ginasio');
+  raise notice 'ok    admin publica aviso';
+end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  if (select count(*) from avisos) = 0 then
+    raise exception 'FALHOU — aviso de evento publicado deveria ser visivel';
+  end if;
+  raise notice 'ok    aviso de evento publicado visivel para todos';
+end $$;
+
 select 'TODOS OS TESTES PASSARAM' as resultado;

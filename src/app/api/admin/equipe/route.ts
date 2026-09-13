@@ -22,43 +22,25 @@ function traduzir(msg: string) {
   return { corpo: { erro: "falha_ao_gravar" }, status: 400 };
 }
 
-/** Adiciona alguém à equipe pelo e-mail da conta que a pessoa já criou. */
+/** Dá acesso a uma conta escolhida na lista. */
 export async function POST(req: Request) {
   const { erro } = await exigirAdminNaApi();
   if (erro) return erro;
 
   const corpo = z
-    .object({ email: z.email(), papel: Papel.default("membro") })
+    .object({ userId: z.uuid(), papel: Papel.default("membro") })
     .safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
 
-  const email = corpo.data.email.trim().toLowerCase();
-
-  /*
-   * Achar o usuário pelo e-mail exige service role: `auth.users` não é
-   * alcançável pela chave anônima, nem para a diretoria.
-   *
-   * A pessoa precisa ter criado a conta antes. Convidar quem ainda não existe
-   * significaria criar usuário sem senha, e aí o acesso da diretoria passaria
-   * a depender de um fluxo de convite que ninguém pediu.
-   */
+  // A lista da tela pode estar velha: confere que a conta ainda existe.
   const admin = criarClienteAdmin();
-  const { data: lista, error: erroBusca } = await admin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1000,
-  });
-  if (erroBusca) {
-    console.error("[equipe] listUsers falhou", erroBusca.message);
-    return NextResponse.json({ erro: "falha_ao_buscar" }, { status: 500 });
-  }
-
-  const usuario = lista.users.find((u) => u.email?.toLowerCase() === email);
-  if (!usuario) return NextResponse.json({ erro: "conta_nao_existe" }, { status: 404 });
+  const { data: conta } = await admin.auth.admin.getUserById(corpo.data.userId);
+  if (!conta?.user) return NextResponse.json({ erro: "conta_nao_existe" }, { status: 404 });
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("diretoria")
-    .upsert({ user_id: usuario.id, papel: corpo.data.papel });
+    .upsert({ user_id: corpo.data.userId, papel: corpo.data.papel });
 
   if (error) {
     const { corpo: c, status } = traduzir(error.message);

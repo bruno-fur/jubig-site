@@ -3,21 +3,54 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { pegarSessao, papelDe } from "@/lib/sessao";
 
+const texto = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullish()
+    .transform((v) => (v ? v : null));
+
 const Igreja = z.object({
   nome: z.string().trim().min(3).max(120),
+  estado: z.string().trim().length(2).transform((v) => v.toUpperCase()),
   cidade: z.string().trim().min(2).max(80),
-  estado: z.string().trim().length(2).default("PR"),
-  endereco: z.string().trim().max(200).nullish(),
-  // Limites do oeste do Paraná são folgados de propósito: a união pode crescer
-  // para a fronteira, e coordenada fora do mundo o Postgres já recusaria.
+  cep: z
+    .string()
+    .nullish()
+    .transform((v) => {
+      const d = (v ?? "").replace(/\D/g, "");
+      return d.length === 8 ? d : null;
+    }),
+  logradouro: texto(160),
+  numero: texto(20),
+  complemento: texto(80),
+  bairro: texto(80),
+  // Vêm da busca automática no navegador; nulas quando o endereço não foi achado.
   latitude: z.number().min(-90).max(90).nullish(),
   longitude: z.number().min(-180).max(180).nullish(),
-  responsavel: z.string().trim().max(120).nullish(),
-  telefone: z.string().trim().max(20).nullish(),
-  instagram: z.string().trim().max(40).nullish(),
+  responsavel: texto(120),
+  instagram: texto(40).transform((v) => (v ? v.replace(/^@/, "") : null)),
   ativa: z.boolean().default(true),
   ordem: z.number().int().min(0).max(999).default(0),
 });
+
+type Partes = {
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cep?: string | null;
+};
+
+/** "Rua X, 123 - sala 2 - Centro · 85935-000" — o texto que a home mostra. */
+function montarEndereco(p: Partes) {
+  if (!p.logradouro) return null;
+  const rua = [p.logradouro, p.numero].filter(Boolean).join(", ");
+  const partes = [rua, p.complemento, p.bairro].filter(Boolean).join(" - ");
+  const cep = p.cep ? `${p.cep.slice(0, 5)}-${p.cep.slice(5)}` : null;
+  return cep ? `${partes} · CEP ${cep}` : partes;
+}
 
 async function exigirAdminNaApi() {
   const sessao = await pegarSessao();
@@ -35,7 +68,9 @@ export async function POST(req: Request) {
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
 
   const supabase = await createClient();
-  const { error } = await supabase.from("igrejas").insert(corpo.data);
+  const { error } = await supabase
+    .from("igrejas")
+    .insert({ ...corpo.data, endereco: montarEndereco(corpo.data) });
   if (error) {
     console.error("[igrejas] insert falhou", error.message);
     return NextResponse.json({ erro: "falha_ao_gravar" }, { status: 400 });
@@ -47,14 +82,15 @@ export async function PATCH(req: Request) {
   const { erro } = await exigirAdminNaApi();
   if (erro) return erro;
 
-  const corpo = Igreja.partial()
-    .extend({ id: z.uuid() })
-    .safeParse(await req.json().catch(() => null));
+  const corpo = Igreja.extend({ id: z.uuid() }).safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
 
   const { id, ...campos } = corpo.data;
   const supabase = await createClient();
-  const { error } = await supabase.from("igrejas").update(campos).eq("id", id);
+  const { error } = await supabase
+    .from("igrejas")
+    .update({ ...campos, endereco: montarEndereco(campos) })
+    .eq("id", id);
   if (error) {
     console.error("[igrejas] update falhou", error.message);
     return NextResponse.json({ erro: "falha_ao_gravar" }, { status: 400 });

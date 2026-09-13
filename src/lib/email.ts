@@ -6,7 +6,12 @@ import {
   emailComprovanteRecebido,
   emailInscricaoAprovada,
   emailComprovanteRecusado,
+  emailRedefinirSenha,
+  emailAviso,
+  emailLembrete,
   type DadosInscricao,
+  type DadosAviso,
+  type DadosLembrete,
 } from "@/emails/templates";
 
 /*
@@ -88,4 +93,12 @@ export const Emails = {
 
   comprovanteRecusado: (para: string, d: DadosInscricao, motivo: string) =>
     enviar(para, emailComprovanteRecusado(d, motivo)),
+
+  redefinirSenha: (para: string, nome: string, url: string) =>
+    enviar(para, emailRedefinirSenha(nome, url)),
+
+  aviso: (para: string, nome: string, a: DadosAviso) => enviar(para, emailAviso(nome, a)),
+
+  lembrete: (para: string, nome: string, tipo: "semana" | "vespera", d: DadosLembrete) =>
+    enviar(para, emailLembrete(nome, tipo, d)),
 };

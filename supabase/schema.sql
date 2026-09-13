@@ -996,3 +996,181 @@ with (security_invoker = false) as
   group by e.id, i.nome;
 
 grant select on agenda to anon, authenticated;
+
+-- ============================================================
+-- Ingresso e check-in
+--
+-- Um ingresso por pessoa, não por inscrição: numa caravana de 15, cada um
+-- entra com o próprio QR. O código é um uuid aleatório — o QR aponta para
+-- /diretoria/ingresso/<uuid>, e só quem é da diretoria abre essa página.
+-- Quem fotografar o QR de outra pessoa não vê nome, CPF nem nada.
+-- ============================================================
+alter table inscritos add column if not exists ingresso uuid not null default gen_random_uuid();
+create unique index if not exists inscritos_ingresso on inscritos (ingresso);
+alter table inscritos add column if not exists checkin_em timestamptz;
+alter table inscritos add column if not exists checkin_por uuid references auth.users;
+
+/*
+ * Ingresso e check-in só mudam pela diretoria.
+ *
+ * A política "meus inscritos" deixa o dono atualizar a própria linha — sem
+ * esta trava, ele apagaria o `checkin_em` depois de entrar e passaria o print
+ * do QR para um amigo usar de novo na porta.
+ */
+/*
+ * SECURITY INVOKER de propósito. Em `security definer`, `current_user` vira o
+ * dono da função (postgres) e a lista abaixo liberava todo mundo — o teste
+ * pegou o dono apagando o próprio check-in. Rodando como quem chamou, o
+ * usuário comum aparece como `authenticated` e é barrado; `registrar_checkin`,
+ * que é definer, aparece como postgres e passa.
+ */
+create or replace function proteger_ingresso() returns trigger
+language plpgsql set search_path = public as $fn$
+begin
+  if current_user in ('postgres', 'service_role', 'supabase_admin') or eh_diretoria() then
+    return new;
+  end if;
+  if new.ingresso is distinct from old.ingresso
+     or new.checkin_em is distinct from old.checkin_em
+     or new.checkin_por is distinct from old.checkin_por then
+    raise exception 'ingresso_protegido';
+  end if;
+  return new;
+end $fn$;
+
+drop trigger if exists inscritos_protege_ingresso on inscritos;
+create trigger inscritos_protege_ingresso
+  before update on inscritos
+  for each row execute function proteger_ingresso();
+
+/*
+ * Registra a entrada. Uma vez só, e só com a inscrição confirmada.
+ *
+ * Em transação com `for update`: dois leitores na porta escaneando o mesmo QR
+ * no mesmo segundo não registram duas entradas. Devolve o motivo em vez de
+ * estourar, porque a tela da portaria precisa dizer "já entrou às 19h04",
+ * não "erro".
+ */
+create or replace function registrar_checkin(p_ingresso uuid) returns text
+language plpgsql security definer set search_path = public as $fn$
+declare v_id uuid; v_checkin timestamptz; v_status status_inscricao;
+begin
+  if not eh_diretoria() then return 'sem_permissao'; end if;
+
+  select ins.id, ins.checkin_em, i.status into v_id, v_checkin, v_status
+    from inscritos ins
+    join inscricoes i on i.id = ins.inscricao_id
+   where ins.ingresso = p_ingresso
+   for update of ins;
+
+  if v_id is null then return 'nao_encontrado'; end if;
+  if v_status <> 'confirmada' then return 'nao_confirmada'; end if;
+  if v_checkin is not null then return 'ja_entrou'; end if;
+
+  update inscritos set checkin_em = now(), checkin_por = auth.uid() where id = v_id;
+  return 'ok';
+end $fn$;
+
+revoke all on function registrar_checkin(uuid) from public, anon;
+grant execute on function registrar_checkin(uuid) to authenticated;
+
+-- ============================================================
+-- Endereço das igrejas em partes
+--
+-- `endereco` continua existindo como texto pronto para exibir; as partes
+-- servem ao formulário (CEP preenche o resto) e à busca da coordenada.
+-- ============================================================
+alter table igrejas add column if not exists cep text;
+alter table igrejas add column if not exists logradouro text;
+alter table igrejas add column if not exists numero text;
+alter table igrejas add column if not exists complemento text;
+alter table igrejas add column if not exists bairro text;
+
+-- ============================================================
+-- Redefinição de senha própria
+--
+-- Mesmo motivo da confirmação de e-mail: o e-mail do Supabase não passa pelo
+-- nosso SMTP nem pelo nosso template. Token de 1 hora, uso único, e tabela
+-- sem política de RLS — só o service role alcança.
+-- ============================================================
+create table if not exists redefinicoes_senha (
+  token uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade,
+  criado_em timestamptz not null default now(),
+  expira_em timestamptz not null default now() + interval '1 hour',
+  usado_em timestamptz
+);
+create index if not exists redefinicoes_usuario on redefinicoes_senha (user_id, criado_em desc);
+alter table redefinicoes_senha enable row level security;
+
+/*
+ * Acha a conta pelo e-mail sem listar todos os usuários.
+ *
+ * `auth.admin.listUsers` pagina de 1000 em 1000 e traz tudo — para achar um
+ * e-mail, ler a base inteira. Aqui é uma consulta indexada. Só o service role
+ * executa: exposta ao público, viraria um jeito de testar quem tem conta.
+ */
+create or replace function usuario_por_email(p_email text) returns uuid
+language sql stable security definer set search_path = public, auth as $fn$
+  select id from auth.users where lower(email) = lower(trim(p_email)) limit 1
+$fn$;
+
+revoke all on function usuario_por_email(text) from public, anon, authenticated;
+
+/*
+ * Valida e consome o token numa tacada, devolvendo de quem é.
+ * Se a troca de senha falhar depois, a rota devolve o token (usado_em = null).
+ */
+create or replace function consumir_redefinicao(p_token uuid) returns uuid
+language plpgsql security definer set search_path = public as $fn$
+declare v_usuario uuid;
+begin
+  update redefinicoes_senha
+     set usado_em = now()
+   where token = p_token and usado_em is null and expira_em > now()
+  returning user_id into v_usuario;
+  return v_usuario;
+end $fn$;
+
+revoke all on function consumir_redefinicao(uuid) from public, anon, authenticated;
+
+-- ============================================================
+-- Avisos e lembretes
+--
+-- Aviso: a diretoria escreve uma atualização do evento, que aparece na página
+-- dele e vai por e-mail para cada responsável de inscrição ativa.
+--
+-- Lembrete: e-mail automático perto da data. A tabela de enviados impede o
+-- mesmo lembrete de sair duas vezes se a rotina rodar de novo no mesmo dia.
+-- ============================================================
+create table if not exists avisos (
+  id uuid primary key default gen_random_uuid(),
+  evento_id uuid not null references eventos on delete cascade,
+  titulo text not null,
+  mensagem text not null,
+  criado_por uuid references auth.users,
+  criado_em timestamptz not null default now(),
+  enviados int not null default 0
+);
+create index if not exists avisos_evento on avisos (evento_id, criado_em desc);
+
+alter table avisos enable row level security;
+
+drop policy if exists "avisos de evento publicado" on avisos;
+create policy "avisos de evento publicado" on avisos
+  for select using (
+    exists (select 1 from eventos e where e.id = evento_id and (e.publicado or eh_diretoria()))
+  );
+
+drop policy if exists "admin publica avisos" on avisos;
+create policy "admin publica avisos" on avisos
+  for all using (eh_admin()) with check (eh_admin());
+
+create table if not exists lembretes_enviados (
+  evento_id uuid not null references eventos on delete cascade,
+  user_id uuid not null references auth.users on delete cascade,
+  tipo text not null check (tipo in ('semana', 'vespera')),
+  enviado_em timestamptz not null default now(),
+  primary key (evento_id, user_id, tipo)
+);
+alter table lembretes_enviados enable row level security;

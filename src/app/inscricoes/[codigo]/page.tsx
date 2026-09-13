@@ -105,7 +105,20 @@ export default async function PaginaPagamento({
         </div>
       </section>
 
-      {quitado ? (
+      {inscricao.status === "confirmada" ? (
+        <div className="mt-6 flex flex-wrap items-center gap-4 rounded-[16px] border border-ok/30 bg-ok/5 p-5">
+          <img src="/juca/joia.webp" alt="" className="h-16 w-16 object-contain" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-ok">Tudo pago e confirmado.</p>
+            <p className="text-sm text-tinta">
+              Os ingressos com QR Code já estão liberados — um para cada pessoa.
+            </p>
+          </div>
+          <Link href={`/inscricoes/${inscricao.codigo}/ingressos`} className="botao-primario">
+            Ver ingressos
+          </Link>
+        </div>
+      ) : quitado ? (
         <div className="mt-6 flex items-center gap-4 rounded-[16px] border border-ok/30 bg-ok/5 p-5">
           <img src="/juca/nervoso.webp" alt="" className="h-16 w-16 object-contain" />
           <p className="text-sm text-tinta">

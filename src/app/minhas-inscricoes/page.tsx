@@ -126,12 +126,23 @@ export default async function MinhasInscricoes() {
                   {formatarReais(i.valor_centavos)}
                   {i.parcelas > 1 && ` · ${pagos} de ${i.parcelas} comprovantes`}
                 </span>
-                <Link
-                  href={`/inscricoes/${i.codigo}`}
-                  className={faltaComprovante ? "botao-primario px-4 py-2 text-sm" : "botao-secundario px-4 py-2 text-sm"}
-                >
-                  {faltaComprovante ? "Pagar e enviar comprovante" : "Ver inscrição"}
-                </Link>
+                <span className="flex flex-wrap gap-2">
+                  {i.status === "confirmada" && (
+                    <Link href={`/inscricoes/${i.codigo}/ingressos`} className="botao-primario px-4 py-2 text-sm">
+                      Ingressos
+                    </Link>
+                  )}
+                  <Link
+                    href={`/inscricoes/${i.codigo}`}
+                    className={
+                      faltaComprovante && i.status !== "confirmada"
+                        ? "botao-primario px-4 py-2 text-sm"
+                        : "botao-secundario px-4 py-2 text-sm"
+                    }
+                  >
+                    {faltaComprovante && i.status !== "confirmada" ? "Pagar e enviar comprovante" : "Ver inscrição"}
+                  </Link>
+                </span>
               </footer>
             </article>
           );

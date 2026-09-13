@@ -151,9 +151,31 @@ figurinha muda** — senão ele pulsa a cada letra e vira ruído.
 - [x] Criar e editar modalidades (só admin)
 - [x] Gerenciar quem tem acesso e com qual nível (só admin)
 
-**Três níveis:** `admin` mexe na estrutura (modalidades, evento, equipe),
-`membro` faz o dia a dia (validar comprovante, exportar), usuário comum não
-enxerga nada da diretoria. O banco garante que sempre sobre ao menos um admin.
+- [x] Portaria: leitor de QR no site, check-in uma vez só por ingresso
+- [x] Avisos por evento, na página e por e-mail (só admin)
+- [x] Lista geral de usuários (só admin)
+- [x] Dar acesso escolhendo a conta numa lista, não digitando e-mail
+- [x] Igrejas por CEP/estado/cidade (IBGE + ViaCEP), coordenada automática (Nominatim)
+
+**Três níveis:** `admin` mexe na estrutura (modalidades, evento, equipe,
+igrejas, avisos, usuários), `membro` faz o dia a dia (validar comprovante,
+exportar, portaria), usuário comum não enxerga nada da diretoria. O banco
+garante que sempre sobre ao menos um admin.
+
+### 6. Pós-confirmação
+- [x] Ingresso com QR por pessoa quando a inscrição está `confirmada`
+      (página imprimível + PDF). O QR aponta para `/diretoria/ingresso/<uuid>`
+      e **não carrega dado nenhum** — só a diretoria vê nome e CPF ao abrir.
+- [x] `ingresso` e `checkin_*` só mudam pela diretoria (trigger). Sem isso o
+      dono apagaria o próprio check-in e passaria o print para outro entrar.
+- [x] Lembretes automáticos D-7 e véspera (Vercel Cron, `CRON_SECRET`
+      obrigatório — sem ele a rota recusa tudo)
+- [x] Redefinição de senha própria, pelo nosso SMTP. A resposta é **a mesma
+      com ou sem conta**: dizer "e-mail não encontrado" deixa qualquer um
+      descobrir quem está cadastrado.
+
+**Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
+(avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 
 ### 5. Site público
 - [x] Home: hero, atalhos, quem somos, calendário, mapa das igrejas, galeria, contato

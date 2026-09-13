@@ -103,9 +103,9 @@ export function emailInscricaoAprovada(d: DadosInscricao) {
         ]) +
         texto(
           `${selo("Confirmada", "#1F5C2C", "#DFF0E2")}`,
-          "Leve este código na chegada — é o que agiliza o credenciamento.",
+          "Os ingressos com QR Code já estão liberados — um para cada pessoa. Baixe ou imprima e leve na chegada: é o que agiliza a portaria.",
         ),
-      botao: { texto: "Ver minha inscrição", url: `${urlDoSite()}/minhas-inscricoes` },
+      botao: { texto: "Baixar os ingressos", url: `${urlDoSite()}/inscricoes/${d.codigo}/ingressos` },
       rodapeWhatsApp: `Olá! Minha inscrição ${d.codigo} foi confirmada.`,
     }),
   };
@@ -135,4 +135,124 @@ export function emailComprovanteRecusado(d: DadosInscricao, motivo: string) {
       rodapeWhatsApp: `Olá! Meu comprovante da inscrição ${d.codigo} foi recusado, mas fiz o pagamento.`,
     }),
   };
+}
+
+/** 5. Redefinir senha — link de uso único, vale 1 hora. */
+export function emailRedefinirSenha(nome: string, url: string) {
+  const primeiro = nome.trim().split(" ")[0];
+  return {
+    subject: "Redefinir sua senha da JUBIG",
+    html: layout({
+      preheader: "O link vale por 1 hora e só funciona uma vez.",
+      estado: "heh",
+      titulo: primeiro ? `Bora trocar essa senha, ${primeiro}` : "Bora trocar essa senha",
+      corpo: texto(
+        "Alguém pediu para redefinir a senha desta conta. Se foi você, é só clicar no botão abaixo e escolher uma senha nova.",
+        "<strong>O link vale por 1 hora</strong> e só funciona uma vez.",
+        "Se não foi você, pode ignorar este e-mail: sua senha continua a mesma.",
+      ),
+      botao: { texto: "Escolher senha nova", url },
+      rodapeWhatsApp: "Olá! Não consigo redefinir minha senha na JUBIG.",
+    }),
+  };
+}
+
+export type DadosAviso = {
+  evento: string;
+  slug: string;
+  titulo: string;
+  mensagem: string;
+};
+
+/** 6. Aviso da diretoria sobre um evento. */
+export function emailAviso(nome: string, a: DadosAviso) {
+  const primeiro = nome.trim().split(" ")[0];
+  // O texto vem do painel: quebra de linha vira parágrafo, e HTML digitado
+  // é escapado para não quebrar o layout nem virar link malicioso.
+  const paragrafos = a.mensagem
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((p) => escapar(p).replace(/\n/g, "<br>"));
+
+  return {
+    subject: `${a.evento}: ${a.titulo}`,
+    html: layout({
+      // O layout interpola sem escapar; título vem digitado do painel.
+      preheader: escapar(a.titulo),
+      estado: "heh",
+      titulo: escapar(a.titulo),
+      corpo:
+        texto(primeiro ? `Oi ${primeiro}, novidade sobre o <strong>${escapar(a.evento)}</strong>:` : `Novidade sobre o <strong>${escapar(a.evento)}</strong>:`) +
+        texto(...paragrafos),
+      botao: { texto: "Ver o evento", url: `${urlDoSite()}/${a.slug}` },
+      rodapeWhatsApp: `Olá! Vi o aviso sobre o ${a.evento}.`,
+    }),
+  };
+}
+
+export type DadosLembrete = {
+  evento: string;
+  slug: string;
+  data: string;
+  local: string;
+  codigo: string;
+  confirmada: boolean;
+};
+
+/** 7. Lembrete automático perto da data. */
+export function emailLembrete(nome: string, tipo: "semana" | "vespera", d: DadosLembrete) {
+  const primeiro = nome.trim().split(" ")[0] || "pessoal";
+
+  if (tipo === "vespera") {
+    return {
+      subject: `É amanhã: ${d.evento}!`,
+      html: layout({
+        preheader: "Separe o ingresso com QR Code — ele agiliza a portaria.",
+        estado: "choque",
+        titulo: `É amanhã, ${primeiro}!`,
+        corpo:
+          texto(`O <strong>${escapar(d.evento)}</strong> é amanhã.`) +
+          caixaDados([
+            ["Quando", d.data],
+            ["Onde", d.local],
+            ["Código", d.codigo],
+          ]) +
+          texto("Leve o ingresso de cada pessoa — no celular ou impresso. É o QR Code que libera a entrada."),
+        botao: { texto: "Abrir os ingressos", url: `${urlDoSite()}/inscricoes/${d.codigo}/ingressos` },
+        rodapeWhatsApp: `Olá! Dúvida sobre amanhã, inscrição ${d.codigo}.`,
+      }),
+    };
+  }
+
+  return {
+    subject: d.confirmada
+      ? `Falta uma semana para o ${d.evento}`
+      : `Falta uma semana e sua inscrição ${d.codigo} ainda não está confirmada`,
+    html: layout({
+      preheader: d.confirmada
+        ? "Sua vaga está garantida. Já dá para baixar os ingressos."
+        : "Envie o comprovante do PIX para garantir a vaga.",
+      estado: d.confirmada ? "joia" : "susto",
+      titulo: d.confirmada ? "Falta uma semana!" : "Falta uma semana — e o pagamento?",
+      corpo:
+        caixaDados([
+          ["Evento", d.evento],
+          ["Quando", d.data],
+          ["Onde", d.local],
+          ["Código", d.codigo],
+        ]) +
+        texto(
+          d.confirmada
+            ? "Vaga garantida. Os ingressos com QR Code já estão disponíveis."
+            : "<strong>Sua vaga ainda não está garantida.</strong> Se já pagou, envie o comprovante pelo site; se ainda não, o PIX está na página da inscrição.",
+        ),
+      botao: d.confirmada
+        ? { texto: "Baixar os ingressos", url: `${urlDoSite()}/inscricoes/${d.codigo}/ingressos` }
+        : { texto: "Pagar e enviar comprovante", url: `${urlDoSite()}/inscricoes/${d.codigo}` },
+      rodapeWhatsApp: `Olá! Sobre a inscrição ${d.codigo} no ${d.evento}.`,
+    }),
+  };
+}
+
+function escapar(t: string) {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

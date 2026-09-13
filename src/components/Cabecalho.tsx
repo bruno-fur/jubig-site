@@ -7,7 +7,7 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
   const diretoria = sessao ? await ehDiretoria(sessao.userId) : false;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-linha bg-creme/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-linha bg-creme/90 backdrop-blur print:hidden">
       <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
         <Link href="/" aria-label="JUBIG — início" className="shrink-0">
           {/* 1103x551 no arquivo; a altura fixa e a largura automática mantêm a proporção. */}

@@ -1,38 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Girando } from "@/components/Girando";
 import { Recado } from "@/components/Recado";
 import { useAcao } from "@/lib/useAcao";
 import { ROTULO_PAPEL, type MembroDiretoria, type Papel } from "@/tipos/db";
 
+type Candidato = {
+  id: string;
+  nome: string;
+  email: string;
+  igreja: string | null;
+  emailConfirmado: boolean;
+};
+
 const MENSAGEM: Record<string, string> = {
-  conta_nao_existe:
-    "Ninguém com esse e-mail criou conta no site ainda. Peça para a pessoa se cadastrar primeiro.",
+  conta_nao_existe: "Essa conta não existe mais. Recarregue a página.",
   ultimo_admin: "Precisa sobrar pelo menos um administrador.",
   nao_remova_a_si: "Você não pode tirar o próprio acesso.",
   sem_permissao: "Só administrador mexe na equipe.",
-  pedido_invalido: "Confira o e-mail.",
+  pedido_invalido: "Escolha uma pessoa da lista.",
 };
+
+const normal = (t: string) => (t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /**
  * Quem tem acesso ao painel, e com qual nível.
  *
- * Adicionar é por e-mail de conta já existente. Convidar quem ainda não se
- * cadastrou exigiria criar usuário sem senha e um fluxo de convite inteiro —
- * a pessoa cria a conta pelo site, como todo mundo, e aí entra na lista.
+ * Escolhe-se a pessoa numa lista das contas existentes, em vez de digitar o
+ * e-mail: e-mail digitado errado dava "conta não encontrada" e ninguém sabia
+ * se a pessoa não tinha conta ou se tinha uma letra trocada.
  */
 export function GerenciarEquipe({
   membros,
+  candidatos,
   euId,
 }: {
   membros: MembroDiretoria[];
+  candidatos: Candidato[];
   euId: string;
 }) {
-  const [email, setEmail] = useState("");
+  const [busca, setBusca] = useState("");
+  const [escolhido, setEscolhido] = useState<Candidato | null>(null);
   const [papel, setPapel] = useState<Papel>("membro");
   const acao = useAcao({ mensagens: MENSAGEM, sucesso: "Acesso atualizado." });
   const ocupado = acao.ocupado;
+
+  const filtrados = useMemo(() => {
+    const q = normal(busca.trim());
+    const lista = q
+      ? candidatos.filter((c) => [c.nome, c.email, c.igreja ?? ""].some((x) => normal(x).includes(q)))
+      : candidatos;
+    // Lista longa não ajuda ninguém: com a busca vazia, só as mais recentes.
+    return lista.slice(0, 30);
+  }, [busca, candidatos]);
 
   async function chamar(metodo: "POST" | "PATCH" | "DELETE", corpo: unknown) {
     const { ok } = await acao.json("/api/admin/equipe", metodo, corpo);
@@ -46,33 +67,88 @@ export function GerenciarEquipe({
       <section className="cartao mb-6 p-5">
         <h2 className="titulo text-lg">Dar acesso a alguém</h2>
         <p className="mt-1 text-sm text-apagado">
-          A pessoa precisa ter criado a conta no site antes.
+          Busque a pessoa entre as contas criadas no site e escolha o nível.
         </p>
 
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (await chamar("POST", { email, papel })) setEmail("");
-          }}
-          className="mt-3 grid gap-3 sm:grid-cols-[2fr_1fr_auto]"
-        >
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@da.pessoa"
-            className="campo-texto"
-          />
+        {escolhido ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-[10px] border-2 border-laranja bg-laranja/5 p-3">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-tinta">{escolhido.nome}</span>
+              <span className="block text-sm break-all text-apagado">{escolhido.email}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setEscolhido(null)}
+              className="text-sm font-semibold text-apagado hover:underline"
+            >
+              Trocar
+            </button>
+          </div>
+        ) : (
+          <>
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Nome, e-mail ou igreja"
+              aria-label="Buscar conta"
+              className="campo-texto mt-3"
+            />
+            <ul
+              role="listbox"
+              aria-label="Contas"
+              className="mt-2 max-h-72 divide-y divide-linha overflow-y-auto rounded-[10px] border border-linha"
+            >
+              {filtrados.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={false}
+                    onClick={() => setEscolhido(c)}
+                    className="w-full px-3 py-2 text-left hover:bg-areia focus-visible:bg-areia"
+                  >
+                    <span className="block text-sm font-semibold text-tinta">{c.nome}</span>
+                    <span className="block text-xs break-all text-apagado">
+                      {c.email}
+                      {c.igreja && ` · ${c.igreja}`}
+                      {!c.emailConfirmado && " · e-mail não confirmado"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {filtrados.length === 0 && (
+                <li className="px-3 py-3 text-sm text-apagado">
+                  {candidatos.length === 0
+                    ? "Todas as contas já são da equipe."
+                    : "Ninguém encontrado. A pessoa precisa ter criado conta no site."}
+                </li>
+              )}
+            </ul>
+          </>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
           <select
             value={papel}
             onChange={(e) => setPapel(e.target.value as Papel)}
-            className="campo-texto"
+            aria-label="Nível de acesso"
+            className="campo-texto w-auto"
           >
             <option value="membro">Diretoria</option>
             <option value="admin">Administrador</option>
           </select>
-          <button type="submit" disabled={ocupado} className="botao-primario">
+          <button
+            type="button"
+            disabled={ocupado || !escolhido}
+            onClick={async () => {
+              if (escolhido && (await chamar("POST", { userId: escolhido.id, papel }))) {
+                setEscolhido(null);
+                setBusca("");
+              }
+            }}
+            className="botao-primario"
+          >
             {ocupado ? (
               <>
                 <Girando />
@@ -82,7 +158,7 @@ export function GerenciarEquipe({
               "Dar acesso"
             )}
           </button>
-        </form>
+        </div>
 
         <div className="mt-3 empty:hidden">
           <Recado erro={acao.erro} sucesso={acao.feito} aoFechar={acao.limpar} />
@@ -94,11 +170,11 @@ export function GerenciarEquipe({
         <ul className="mt-2 space-y-2 text-sm text-apagado">
           <li>
             <strong className="text-tinta">Diretoria</strong> — confere comprovante, aprova,
-            recusa e exporta a lista.
+            recusa, exporta a lista e faz a portaria.
           </li>
           <li>
-            <strong className="text-tinta">Administrador</strong> — tudo isso, mais criar e apagar
-            modalidades, mexer no evento e dar acesso a outras pessoas.
+            <strong className="text-tinta">Administrador</strong> — tudo isso, mais modalidades,
+            igrejas, avisos, lista de usuários e dar acesso a outras pessoas.
           </li>
           <li>
             <strong className="text-tinta">Demais usuários</strong> — só as próprias inscrições.
@@ -119,7 +195,7 @@ export function GerenciarEquipe({
                   {m.nome}
                   {euMesmo && <span className="font-normal text-apagado"> · você</span>}
                 </span>
-                <span className="block text-sm text-apagado">{m.email}</span>
+                <span className="block text-sm break-all text-apagado">{m.email}</span>
               </span>
 
               <span className="flex shrink-0 items-center gap-3">

@@ -34,7 +34,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     ? await supabase.from("igrejas").select("*").eq("id", evento.igreja_id).maybeSingle()
     : { data: null };
 
-  const [{ data: programacao }, { data: duvidas }, esportes, restantes] = await Promise.all([
+  const [{ data: programacao }, { data: duvidas }, esportes, restantes, { data: avisos }] = await Promise.all([
     supabase.from("programacao").select("*").eq("evento_id", evento.id).order("ordem"),
     supabase
       .from("duvidas")
@@ -43,6 +43,14 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       .order("ordem"),
     esportesDoEvento(evento.id),
     vagasRestantes(evento),
+    // Tabela nova: se o schema ainda não rodou, a consulta falha e a página
+    // simplesmente não mostra avisos.
+    supabase
+      .from("avisos")
+      .select("id, titulo, mensagem, criado_em")
+      .eq("evento_id", evento.id)
+      .order("criado_em", { ascending: false })
+      .limit(5),
   ]);
 
   const abertas = evento.tem_inscricao && inscricoesAbertas(evento);
@@ -209,6 +217,25 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       </section>
 
       <div className="mx-auto max-w-3xl px-4 py-10">
+        {avisos && avisos.length > 0 && (
+          <section aria-labelledby="titulo-avisos" className="mb-8">
+            <h2 id="titulo-avisos" className="titulo mb-3 text-xl">
+              Avisos
+            </h2>
+            <ul className="space-y-3">
+              {avisos.map((a) => (
+                <li key={a.id} className="cartao border-l-4 border-l-laranja p-4">
+                  <p className="font-semibold text-tinta">{a.titulo}</p>
+                  <p className="mt-0.5 text-xs text-apagado">
+                    {new Date(a.criado_em).toLocaleDateString("pt-BR")}
+                  </p>
+                  <p className="mt-2 text-sm whitespace-pre-line text-tinta/80">{a.mensagem}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <Abas abas={abas} />
       </div>
 

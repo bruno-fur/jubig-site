@@ -189,7 +189,13 @@ export type Igreja = {
   nome: string;
   cidade: string;
   estado: string;
+  /** Texto pronto para exibir, montado a partir das partes abaixo. */
   endereco: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
   latitude: number | null;
   longitude: number | null;
   responsavel: string | null;
