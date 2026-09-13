@@ -28,6 +28,12 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
   if (!evento) notFound();
 
   const supabase = await createClient();
+
+  // O tour acontece numa igreja da união; os outros formatos não têm anfitriã.
+  const { data: igreja } = evento.igreja_id
+    ? await supabase.from("igrejas").select("*").eq("id", evento.igreja_id).maybeSingle()
+    : { data: null };
+
   const [{ data: programacao }, { data: duvidas }, esportes, restantes] = await Promise.all([
     supabase.from("programacao").select("*").eq("evento_id", evento.id).order("ordem"),
     supabase
@@ -102,28 +108,47 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     {
       id: "local",
       titulo: "Local",
-      conteudo: (
-        <div className="cartao p-5">
-          <p className="titulo text-lg">{evento.local_nome ?? evento.cidade}</p>
-          {evento.local_endereco && <p className="mt-1 text-apagado">{evento.local_endereco}</p>}
-          {evento.local_mapa_url ? (
-            <a
-              href={evento.local_mapa_url}
-              target="_blank"
-              rel="noreferrer"
-              className="botao-secundario mt-4"
-            >
-              Abrir no mapa
-            </a>
-          ) : (
-            <p className="mt-3 text-sm text-apagado">
-              {evento.tem_inscricao
-                ? "O endereço completo sai junto com a confirmação da inscrição."
-                : "O endereço completo sai mais perto da data."}
+      conteudo: (() => {
+        // Na igreja anfitriã o endereço já é público; nos outros, nem sempre.
+        const nome = igreja?.nome ?? evento.local_nome ?? evento.cidade;
+        const endereco = igreja?.endereco ?? evento.local_endereco;
+        const busca = endereco
+          ? `${nome}, ${endereco}, ${igreja?.cidade ?? evento.cidade}`
+          : null;
+
+        return (
+          <div className="cartao p-5">
+            <p className="titulo text-lg">{nome}</p>
+            <p className="mt-1 text-apagado">
+              {igreja ? `${igreja.cidade} · ${igreja.estado}` : evento.cidade}
             </p>
-          )}
-        </div>
-      ),
+            {endereco && <p className="mt-1 text-apagado">{endereco}</p>}
+            {igreja?.responsavel && (
+              <p className="mt-2 text-sm text-apagado">Anfitrião: {igreja.responsavel}</p>
+            )}
+
+            {evento.local_mapa_url || busca ? (
+              <a
+                href={
+                  evento.local_mapa_url ??
+                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca!)}`
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="botao-secundario mt-4"
+              >
+                Como chegar
+              </a>
+            ) : (
+              <p className="mt-3 text-sm text-apagado">
+                {evento.tem_inscricao
+                  ? "O endereço completo sai junto com a confirmação da inscrição."
+                  : "O endereço completo sai mais perto da data."}
+              </p>
+            )}
+          </div>
+        );
+      })(),
     },
     {
       id: "duvidas",

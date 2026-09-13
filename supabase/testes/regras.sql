@@ -499,4 +499,122 @@ begin
   end;
 end $$;
 
+-- ============================================================
+-- Formatos de evento: jubigday, congresso, tour
+-- ============================================================
+set role postgres;
+update eventos set publicado = true
+ where slug in ('congresso-carnaval-2027', 'jubigtour-toledo-2026');
+
+do $$
+begin
+  if (select tem_modalidades from eventos where slug = 'congresso-carnaval-2027') then
+    raise exception 'FALHOU — congresso nao deveria ter modalidades';
+  end if;
+  raise notice 'ok    congresso sem modalidades';
+
+  if not (select tem_inscricao from eventos where slug = 'congresso-carnaval-2027') then
+    raise exception 'FALHOU — congresso deveria ter inscricao';
+  end if;
+  raise notice 'ok    congresso com inscricao';
+
+  if (select tem_inscricao from eventos where slug = 'jubigtour-toledo-2026') then
+    raise exception 'FALHOU — tour nao deveria ter inscricao';
+  end if;
+  raise notice 'ok    tour sem inscricao';
+
+  if (select igreja_id from eventos where slug = 'jubigtour-toledo-2026') is null then
+    raise exception 'FALHOU — tour deveria apontar para uma igreja';
+  end if;
+  raise notice 'ok    tour ligado a uma igreja anfitria';
+end $$;
+
+-- Tipo fora da lista é recusado pelo banco, não só pela tela.
+do $$
+begin
+  perform espera_erro(
+    $x$ update eventos set tipo = 'festa' where slug = 'jubigday-2026' $x$,
+    'eventos_tipo_valido', 'tipo invalido recusado');
+end $$;
+
+-- Inscrição no congresso funciona, e sem esporte nenhum.
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+declare v_codigo text;
+begin
+  v_codigo := criar_inscricao('congresso-carnaval-2027', 2,
+    '[{"nome":"Vai No Congresso","cpf":"00000017400","nascimento":"2000-01-01","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb);
+  if v_codigo !~ '^CC-' then
+    raise exception 'FALHOU — codigo do congresso deveria comecar com CC, veio %', v_codigo;
+  end if;
+  raise notice 'ok    inscricao no congresso com prefixo proprio (%)', v_codigo;
+end $$;
+
+-- A agenda mostra os três, com a contagem de gente.
+set role postgres;
+do $$
+declare v_linhas int; v_tour int;
+begin
+  select count(*) into v_linhas from agenda;
+  if v_linhas < 3 then
+    raise exception 'FALHOU agenda — esperava ao menos 3 eventos publicados, veio %', v_linhas;
+  end if;
+  raise notice 'ok    agenda lista os % eventos publicados', v_linhas;
+
+  select pessoas into v_tour from agenda where slug = 'jubigtour-toledo-2026';
+  if v_tour <> 0 then
+    raise exception 'FALHOU — tour nao tem inscricao, deveria contar 0 pessoas';
+  end if;
+  raise notice 'ok    agenda conta 0 pessoas no tour';
+
+  if (select igreja_nome from agenda where slug = 'jubigtour-toledo-2026') is null then
+    raise exception 'FALHOU — agenda deveria trazer o nome da igreja anfitria';
+  end if;
+  raise notice 'ok    agenda traz a igreja anfitria do tour';
+end $$;
+
+-- ============================================================
+-- Igrejas
+-- ============================================================
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  if (select count(*) from igrejas) = 0 then
+    raise exception 'FALHOU — usuario comum deveria ver as igrejas ativas';
+  end if;
+  raise notice 'ok    igrejas ativas sao publicas';
+
+  perform espera_erro(
+    $x$ insert into igrejas (nome, cidade) values ('Teste', 'Toledo') $x$,
+    'row-level security', 'usuario comum nao cadastra igreja');
+end $$;
+
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+do $$
+begin
+  perform espera_erro(
+    $x$ insert into igrejas (nome, cidade) values ('Teste Membro', 'Toledo') $x$,
+    'row-level security', 'membro da diretoria nao cadastra igreja');
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare v_id uuid;
+begin
+  insert into igrejas (nome, cidade, latitude, longitude)
+  values ('IB Teste Admin', 'Cascavel', -24.955, -53.455) returning id into v_id;
+  raise notice 'ok    admin cadastra igreja';
+
+  delete from igrejas where id = v_id;
+  raise notice 'ok    admin apaga igreja sem evento';
+end $$;
+
+set role postgres;
+update eventos set publicado = false
+ where slug in ('congresso-carnaval-2027', 'jubigtour-toledo-2026');
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
 select 'TODOS OS TESTES PASSARAM' as resultado;
