@@ -902,3 +902,97 @@ with (security_invoker = false) as
 
 revoke all on painel_igrejas from anon, authenticated;
 grant select on painel_igrejas to authenticated;
+
+-- ============================================================
+-- Tipos de evento
+--
+-- Três formatos diferentes, e tratar todos como JubigDay era o erro:
+--   jubigday   — um dia, com modalidades e inscrição paga
+--   congresso  — vários dias, inscrição paga, SEM modalidades
+--   tour       — visita a uma igreja, sem inscrição; entra só na agenda
+--
+-- As duas capacidades são colunas separadas, não deduzidas do tipo. Um
+-- congresso que um dia resolva ter modalidades vira um UPDATE, não um deploy.
+-- ============================================================
+
+alter table eventos add column if not exists tipo text not null default 'jubigday';
+alter table eventos drop constraint if exists eventos_tipo_valido;
+alter table eventos add constraint eventos_tipo_valido
+  check (tipo in ('jubigday', 'congresso', 'tour'));
+
+alter table eventos add column if not exists tem_inscricao boolean not null default true;
+alter table eventos add column if not exists tem_modalidades boolean not null default true;
+
+-- ============================================================
+-- Igrejas da união
+--
+-- Servem ao mapa da home e ao JubigTour, que acontece dentro de uma delas.
+-- Latitude e longitude ficam nulas até alguém preencher: o mapa mostra só
+-- quem tem coordenada, e a lista mostra todas.
+-- ============================================================
+create table if not exists igrejas (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  cidade text not null,
+  estado text not null default 'PR',
+  endereco text,
+  latitude numeric(9, 6),
+  longitude numeric(9, 6),
+  responsavel text,
+  telefone text,                       -- E.164, como todo telefone aqui
+  instagram text,
+  ativa boolean not null default true,
+  ordem int not null default 0,
+  criado_em timestamptz default now()
+);
+create index if not exists igrejas_cidade on igrejas (cidade);
+
+-- O tour acontece numa igreja; os outros eventos não têm igreja anfitriã.
+alter table eventos add column if not exists igreja_id uuid references igrejas on delete set null;
+
+alter table igrejas enable row level security;
+
+drop policy if exists "igrejas publicas" on igrejas;
+create policy "igrejas publicas" on igrejas
+  for select using (ativa or eh_diretoria());
+
+drop policy if exists "admin gerencia igrejas" on igrejas;
+create policy "admin gerencia igrejas" on igrejas
+  for all using (eh_admin()) with check (eh_admin());
+
+/*
+ * Agenda pública: todo evento publicado, passado e futuro.
+ *
+ * `eventos` já é legível por quem é do público, mas a home precisa da contagem
+ * de inscritos junto — e essa não pode sair da tabela `inscritos`, que é
+ * privada. Por isso a view roda como dona e devolve só o número.
+ */
+drop view if exists agenda;
+create view agenda
+with (security_invoker = false) as
+  select
+    e.id,
+    e.slug,
+    e.tipo,
+    e.nome,
+    e.descricao,
+    e.data_evento,
+    e.data_fim,
+    e.cidade,
+    e.local_nome,
+    e.valor_centavos,
+    e.tem_inscricao,
+    e.tem_modalidades,
+    e.inscricoes_ate,
+    i.nome as igreja_nome,
+    count(distinct ins.id) filter (
+      where insc.status in ('aguardando_pagamento', 'em_analise', 'confirmada')
+    )::int as pessoas
+  from eventos e
+  left join igrejas i on i.id = e.igreja_id
+  left join inscricoes insc on insc.evento_id = e.id
+  left join inscritos ins on ins.inscricao_id = insc.id
+  where e.publicado
+  group by e.id, i.nome;
+
+grant select on agenda to anon, authenticated;

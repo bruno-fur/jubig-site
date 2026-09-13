@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { exigirEmailConfirmado } from "@/lib/sessao";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +35,12 @@ export default async function PaginaInscricao({
 
   const evento = await eventoPorSlug(slug);
   if (!evento) notFound();
+
+  /*
+   * Tour não tem inscrição — quem chegar aqui pelo endereço direto vai para a
+   * página do evento, que explica que a entrada é franca.
+   */
+  if (!evento.tem_inscricao) redirect(`/${evento.slug}`);
 
   if (!inscricoesAbertas(evento)) {
     return (
@@ -83,6 +89,7 @@ export default async function PaginaInscricao({
           idadeMinima: evento.idade_minima,
           maxParcelas: evento.max_parcelas,
           maxEsportesPorTurno: evento.max_esportes_por_turno ?? 0,
+          temModalidades: evento.tem_modalidades,
           valorCentavos: evento.valor_centavos,
         }}
         grupos={agruparPorTurno(esportes)}

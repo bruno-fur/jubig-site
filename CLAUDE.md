@@ -12,7 +12,20 @@ Postgres, Storage) + Resend (e-mail) + Vercel (hospedagem).
 pessoa. **As inscrições precisam estar no ar até 26/09/2026**, senão as
 igrejas não conseguem organizar caravana a tempo.
 
-**Evento seguinte:** Congresso de Carnaval, 6 a 9/02/2027, Medianeira.
+**Tipos de evento** — cada um tem formato próprio, e tratar todos como
+JubigDay era o erro original:
+
+| Tipo | Inscrição | Modalidades | Exemplo |
+|---|---|---|---|
+| `jubigday` | sim, paga | sim | JubigDay, 17/10/2026 |
+| `congresso` | sim, paga | **não** | Congresso de Carnaval, 6–9/02/2027 |
+| `tour` | **não**, entrada franca | não | JubigTour — visita a uma igreja |
+
+As duas capacidades são colunas (`tem_inscricao`, `tem_modalidades`), não
+deduzidas do tipo: mudar o formato de um evento é UPDATE, não deploy.
+
+As etapas do formulário de inscrição são **nomeadas**, nunca numeradas — com
+índice, a etapa 2 seria "Conferir" no congresso e "Pagamento" no JubigDay.
 
 **Quem mantém:** uma pessoa só (desenvolvedor C#/SAP, experiente em backend,
 menos em frontend React). A diretoria apenas consulta dados e valida
@@ -143,10 +156,12 @@ figurinha muda** — senão ele pulsa a cada letra e vira ruído.
 enxerga nada da diretoria. O banco garante que sempre sobre ao menos um admin.
 
 ### 5. Site público
-- [ ] Home: hero do próximo evento, quem somos, próximos eventos, galeria,
-      Instagram, contato
-- [ ] `/[evento]` com abas Programação / Local / Dúvidas
-- [ ] Galeria com fotos do bucket público
+- [x] Home: hero, atalhos, quem somos, calendário, mapa das igrejas, galeria, contato
+- [x] Calendário agrupado por mês, com passado e futuro
+- [x] Mapa das igrejas com OpenStreetMap (sem chave de API, sem cartão)
+- [x] `/[evento]` com abas conforme o tipo — Modalidades só quando existe
+- [x] Galeria com fotos do bucket público
+- [x] Cadastro de igrejas em Diretoria > Igrejas
 
 ---
 

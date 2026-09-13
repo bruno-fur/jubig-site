@@ -1,5 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { ORDEM_TURNO, type Evento, type Turno, type VagaEsporte } from "@/tipos/db";
+import {
+  ORDEM_TURNO,
+  type Evento,
+  type Igreja,
+  type ItemAgenda,
+  type Turno,
+  type VagaEsporte,
+} from "@/tipos/db";
 
 /** "2026-09-12" no fuso local — comparar data de evento com `new Date()` erra o dia. */
 export function hojeISO(): string {
@@ -103,4 +110,31 @@ export async function vagasRestantes(evento: Evento): Promise<number | null> {
     .eq("evento_id", evento.id)
     .maybeSingle();
   return Math.max(evento.vagas - (data?.ocupadas ?? 0), 0);
+}
+
+/**
+ * Agenda pública: todo evento publicado, passado e futuro.
+ *
+ * Vem da view `agenda` porque a home precisa da contagem de participantes, e
+ * essa não pode sair de `inscritos` — tabela privada pela RLS.
+ */
+export async function agendaCompleta(): Promise<ItemAgenda[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("agenda").select("*").order("data_evento");
+  return (data ?? []) as ItemAgenda[];
+}
+
+/** Só o que ainda vai acontecer, em ordem. */
+export function daquiPraFrente(itens: ItemAgenda[], hoje = hojeISO()): ItemAgenda[] {
+  return itens.filter((e) => (e.data_fim ?? e.data_evento) >= hoje);
+}
+
+export async function igrejasAtivas(): Promise<Igreja[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("igrejas")
+    .select("*")
+    .order("ordem")
+    .order("cidade");
+  return (data ?? []) as Igreja[];
 }

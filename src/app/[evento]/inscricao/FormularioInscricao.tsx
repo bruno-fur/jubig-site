@@ -23,6 +23,8 @@ type EventoResumo = {
   maxParcelas: number;
   maxEsportesPorTurno: number;
   valorCentavos: number;
+  /** Congresso não tem modalidade: a etapa de esportes some. */
+  temModalidades: boolean;
 };
 
 type Pessoa = {
@@ -38,7 +40,26 @@ type Pessoa = {
   esportes: string[];
 };
 
-const ETAPAS = ["Quem vai", "Esportes", "Conferir", "Pagamento"];
+type Etapa = "pessoas" | "esportes" | "conferir";
+
+const TITULO: Record<Etapa, string> = {
+  pessoas: "Quem vai",
+  esportes: "Esportes",
+  conferir: "Conferir",
+};
+
+/*
+ * As etapas são nomeadas, não numeradas.
+ *
+ * O congresso não tem modalidades e pula "Esportes" — com índice, a etapa 2
+ * significaria "Conferir" num evento e "Pagamento" no outro, e cada condição
+ * do formulário passaria a depender de qual evento está aberto.
+ *
+ * "Pagamento" aparece na barra como quarto passo, mas não é etapa daqui: ela
+ * acontece em /inscricoes/<codigo>, depois de gravar.
+ */
+const etapasDo = (temModalidades: boolean): Etapa[] =>
+  temModalidades ? ["pessoas", "esportes", "conferir"] : ["pessoas", "conferir"];
 
 function pessoaVazia(igreja = ""): Pessoa {
   return {
@@ -81,8 +102,10 @@ function Miolo({
 }) {
   const router = useRouter();
 
-  const [etapa, setEtapa] = useState(0);
+  const etapas = etapasDo(evento.temModalidades);
+  const [etapa, setEtapa] = useState<Etapa>("pessoas");
   const topo = useRef<HTMLDivElement>(null);
+  const posicao = etapas.indexOf(etapa);
   const [pessoas, setPessoas] = useState<Pessoa[]>(() => [
     { ...pessoaVazia(perfil.igreja), nome: perfil.nome },
   ]);
@@ -91,7 +114,7 @@ function Miolo({
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const temEsportes = grupos.length > 0;
+  const temEsportes = evento.temModalidades && grupos.length > 0;
   const total = evento.valorCentavos * pessoas.length;
   const poucasVagas = vagasRestantes !== null && vagasRestantes > 0 && vagasRestantes <= 20;
 
@@ -151,22 +174,22 @@ function Miolo({
    * com o foco no botão da etapa anterior, que agora mostra outra coisa. O
    * foco vai para o cabeçalho da etapa nova, e a leitura recomeça dali.
    */
-  function irPara(n: number) {
+  function irPara(destino: Etapa) {
     setErroGeral(null);
-    setEtapa(n);
+    setEtapa(destino);
     topo.current?.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function avancar() {
     setErroGeral(null);
-    if (etapa === 0 && !conferirPessoas()) return;
-    if (etapa === 1 && temEsportes && !conferirEsportes()) return;
-    irPara(Math.min(etapa + 1, ETAPAS.length - 1));
+    if (etapa === "pessoas" && !conferirPessoas()) return;
+    if (etapa === "esportes" && temEsportes && !conferirEsportes()) return;
+    irPara(etapas[Math.min(posicao + 1, etapas.length - 1)]);
   }
 
   function voltar() {
-    irPara(Math.max(etapa - 1, 0));
+    irPara(etapas[Math.max(posicao - 1, 0)]);
   }
 
   async function enviar() {
@@ -197,10 +220,17 @@ function Miolo({
     if (!resposta.ok) {
       setErroGeral(mensagemDeErro(corpo));
       // Erro de gente ou de CPF é na etapa 1; de modalidade, na 2.
-      if (["nome_incompleto", "cpf_invalido", "cpf_repetido", "idade_minima", "cpf_ja_inscrito", "nascimento_invalido"].includes(corpo.erro))
-        setEtapa(0);
-      else if (["modalidade_lotada", "limite_no_turno", "sem_escolha"].includes(corpo.erro))
-        setEtapa(1);
+      if (
+        ["nome_incompleto", "cpf_invalido", "cpf_repetido", "idade_minima", "cpf_ja_inscrito", "nascimento_invalido"].includes(
+          corpo.erro
+        )
+      )
+        irPara("pessoas");
+      else if (
+        temEsportes &&
+        ["modalidade_lotada", "limite_no_turno", "sem_escolha"].includes(corpo.erro)
+      )
+        irPara("esportes");
       return;
     }
 
@@ -226,7 +256,7 @@ function Miolo({
   return (
     <>
       <div ref={topo} tabIndex={-1} className="focus-visible:outline-none">
-        <Etapas titulos={ETAPAS} atual={etapa} />
+        <Etapas titulos={[...etapas.map((e) => TITULO[e]), "Pagamento"]} atual={posicao} />
       </div>
 
       {erroGeral && (
@@ -235,7 +265,7 @@ function Miolo({
         </p>
       )}
 
-      {etapa === 0 && (
+      {etapa === "pessoas" && (
         <section className="mt-6 space-y-6">
           {pessoas.map((p, i) => (
             <FichaPessoa
@@ -258,7 +288,7 @@ function Miolo({
         </section>
       )}
 
-      {etapa === 1 && (
+      {etapa === "esportes" && (
         <section className="mt-6 space-y-6">
           {!temEsportes ? (
             <div className="cartao p-6 text-center text-apagado">
@@ -282,7 +312,7 @@ function Miolo({
         </section>
       )}
 
-      {etapa === 2 && (
+      {etapa === "conferir" && (
         <Conferencia
           evento={evento}
           pessoas={pessoas}
@@ -294,12 +324,12 @@ function Miolo({
       )}
 
       <div className="mt-8 flex gap-3">
-        {etapa > 0 && (
+        {posicao > 0 && (
           <button type="button" onClick={voltar} className="botao-secundario">
             Voltar
           </button>
         )}
-        {etapa < 2 ? (
+        {etapa !== "conferir" ? (
           <button type="button" onClick={avancar} className="botao-primario flex-1">
             Continuar
           </button>

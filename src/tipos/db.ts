@@ -41,6 +41,11 @@ export type Evento = {
   vagas: number | null;
   inscricoes_ate: string | null;
   troca_esporte_ate_dias: number;
+  tipo: TipoEvento;
+  /** Congresso tem inscrição e não tem modalidade; tour não tem nenhuma das duas. */
+  tem_inscricao: boolean;
+  tem_modalidades: boolean;
+  igreja_id: string | null;
   /** 0 = sem limite de modalidades por turno. */
   max_esportes_por_turno: number;
   pix_chave: string | null;
@@ -162,4 +167,53 @@ export type MembroDiretoria = {
   papel: Papel;
   nome: string;
   email: string;
+};
+
+export type TipoEvento = "jubigday" | "congresso" | "tour";
+
+export const ROTULO_TIPO: Record<TipoEvento, string> = {
+  jubigday: "JubigDay",
+  congresso: "Congresso",
+  tour: "JubigTour",
+};
+
+/** Uma frase por tipo, para a agenda não repetir o nome do evento. */
+export const RESUMO_TIPO: Record<TipoEvento, string> = {
+  jubigday: "Um dia de esporte, música e comunhão",
+  congresso: "Vários dias de congresso",
+  tour: "Visita a uma igreja da união",
+};
+
+export type Igreja = {
+  id: string;
+  nome: string;
+  cidade: string;
+  estado: string;
+  endereco: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  responsavel: string | null;
+  telefone: string | null;
+  instagram: string | null;
+  ativa: boolean;
+  ordem: number;
+};
+
+/** Linha da view `agenda`: evento publicado, com a contagem de gente. */
+export type ItemAgenda = {
+  id: string;
+  slug: string;
+  tipo: TipoEvento;
+  nome: string;
+  descricao: string | null;
+  data_evento: string;
+  data_fim: string | null;
+  cidade: string;
+  local_nome: string | null;
+  valor_centavos: number;
+  tem_inscricao: boolean;
+  tem_modalidades: boolean;
+  inscricoes_ate: string | null;
+  igreja_nome: string | null;
+  pessoas: number;
 };

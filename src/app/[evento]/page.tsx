@@ -6,7 +6,7 @@ import { eventoPorSlug, esportesDoEvento, agruparPorTurno, inscricoesAbertas, va
 import { formatarData, formatarReais } from "@/lib/validacao";
 import { Abas } from "@/components/Abas";
 import { Galeria } from "@/components/Galeria";
-import { ROTULO_TURNO } from "@/tipos/db";
+import { ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
 
 export async function generateMetadata({
   params,
@@ -39,14 +39,119 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     vagasRestantes(evento),
   ]);
 
-  const abertas = inscricoesAbertas(evento);
+  const abertas = evento.tem_inscricao && inscricoesAbertas(evento);
   const poucas = restantes !== null && restantes > 0 && restantes <= 20;
+
+  /*
+   * Congresso não tem modalidade e tour não tem inscrição. Montar as abas a
+   * partir das capacidades evita mostrar "Modalidades" vazio num congresso —
+   * aba vazia parece defeito, não ausência de propósito.
+   */
+  const abas = [
+    {
+      id: "programacao",
+      titulo: "Programação",
+      conteudo:
+        programacao && programacao.length > 0 ? (
+          <ol className="cartao divide-y divide-linha">
+            {programacao.map((p) => (
+              <li key={p.id} className="flex gap-4 p-4">
+                <span className="titulo w-16 shrink-0 text-laranja-escuro">{p.horario}</span>
+                <span className="min-w-0">
+                  <span className="block font-semibold text-tinta">{p.titulo}</span>
+                  {p.descricao && (
+                    <span className="block text-sm text-apagado">{p.descricao}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <Vazio texto="A programação ainda está sendo fechada." />
+        ),
+    },
+    evento.tem_modalidades && {
+      id: "modalidades",
+      titulo: "Modalidades",
+      conteudo:
+        esportes.length > 0 ? (
+          <div className="space-y-5">
+            {agruparPorTurno(esportes).map(([turno, lista]) => (
+              <div key={turno}>
+                <p className="mb-2 text-sm font-semibold text-apagado">{ROTULO_TURNO[turno]}</p>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {lista.map((e) => (
+                    <li
+                      key={e.esporte_id}
+                      className="flex items-center justify-between gap-2 rounded-[10px] border border-linha bg-white p-3 text-sm"
+                    >
+                      <span className="font-semibold text-tinta">{e.nome}</span>
+                      <span className={e.restantes <= 0 ? "text-ruim" : "text-apagado"}>
+                        {e.restantes <= 0 ? "lotada" : `${e.restantes} vagas`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Vazio texto="As modalidades ainda não foram cadastradas." />
+        ),
+    },
+    {
+      id: "local",
+      titulo: "Local",
+      conteudo: (
+        <div className="cartao p-5">
+          <p className="titulo text-lg">{evento.local_nome ?? evento.cidade}</p>
+          {evento.local_endereco && <p className="mt-1 text-apagado">{evento.local_endereco}</p>}
+          {evento.local_mapa_url ? (
+            <a
+              href={evento.local_mapa_url}
+              target="_blank"
+              rel="noreferrer"
+              className="botao-secundario mt-4"
+            >
+              Abrir no mapa
+            </a>
+          ) : (
+            <p className="mt-3 text-sm text-apagado">
+              {evento.tem_inscricao
+                ? "O endereço completo sai junto com a confirmação da inscrição."
+                : "O endereço completo sai mais perto da data."}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "duvidas",
+      titulo: "Dúvidas",
+      conteudo:
+        duvidas && duvidas.length > 0 ? (
+          <div className="cartao divide-y divide-linha">
+            {duvidas.map((d) => (
+              <details key={d.id} className="p-4">
+                <summary className="cursor-pointer font-semibold text-tinta">{d.pergunta}</summary>
+                <p className="mt-2 text-sm text-apagado">{d.resposta}</p>
+              </details>
+            ))}
+          </div>
+        ) : (
+          <Vazio texto="Ainda não temos perguntas cadastradas. Chama a diretoria no WhatsApp." />
+        ),
+    },
+  ].filter(Boolean) as { id: string; titulo: string; conteudo: React.ReactNode }[];
 
   return (
     <>
       <section className="border-b border-linha bg-areia">
         <div className="mx-auto max-w-3xl px-4 py-12">
-          <h1 className="text-4xl">{evento.nome}</h1>
+          <p className="text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
+            {ROTULO_TIPO[evento.tipo]}
+          </p>
+          <h1 className="mt-1 text-4xl">{evento.nome}</h1>
           <p className="mt-2 text-lg text-apagado">
             {formatarData(evento.data_evento)}
             {evento.data_fim && ` a ${formatarData(evento.data_fim)}`} · {evento.cidade}
@@ -56,11 +161,16 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
           <div className="mt-6 flex flex-wrap items-center gap-3">
             {abertas ? (
               <Link href={`/${evento.slug}/inscricao`} className="botao-primario">
-                Inscrever — {formatarReais(evento.valor_centavos)} por pessoa
+                Inscrever
+                {evento.valor_centavos > 0 && ` — ${formatarReais(evento.valor_centavos)} por pessoa`}
               </Link>
-            ) : (
+            ) : evento.tem_inscricao ? (
               <span className="rounded-[10px] bg-tinta/10 px-5 py-3 font-semibold text-apagado">
                 Inscrições encerradas
+              </span>
+            ) : (
+              <span className="rounded-[10px] bg-ok/10 px-5 py-3 font-semibold text-ok">
+                Entrada franca, é só chegar
               </span>
             )}
             {poucas && (
@@ -74,106 +184,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       </section>
 
       <div className="mx-auto max-w-3xl px-4 py-10">
-        <Abas
-          abas={[
-            {
-              id: "programacao",
-              titulo: "Programação",
-              conteudo:
-                programacao && programacao.length > 0 ? (
-                  <ol className="cartao divide-y divide-linha">
-                    {programacao.map((p) => (
-                      <li key={p.id} className="flex gap-4 p-4">
-                        <span className="titulo w-16 shrink-0 text-laranja-escuro">{p.horario}</span>
-                        <span className="min-w-0">
-                          <span className="block font-semibold text-tinta">{p.titulo}</span>
-                          {p.descricao && (
-                            <span className="block text-sm text-apagado">{p.descricao}</span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <Vazio texto="A programação ainda está sendo fechada." />
-                ),
-            },
-            {
-              id: "modalidades",
-              titulo: "Modalidades",
-              conteudo:
-                esportes.length > 0 ? (
-                  <div className="space-y-5">
-                    {agruparPorTurno(esportes).map(([turno, lista]) => (
-                      <div key={turno}>
-                        <p className="mb-2 text-sm font-semibold text-apagado">{ROTULO_TURNO[turno]}</p>
-                        <ul className="grid gap-2 sm:grid-cols-2">
-                          {lista.map((e) => (
-                            <li
-                              key={e.esporte_id}
-                              className="flex items-center justify-between gap-2 rounded-[10px] border border-linha bg-white p-3 text-sm"
-                            >
-                              <span className="font-semibold text-tinta">{e.nome}</span>
-                              <span className={e.restantes <= 0 ? "text-ruim" : "text-apagado"}>
-                                {e.restantes <= 0 ? "lotada" : `${e.restantes} vagas`}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Vazio texto="As modalidades ainda não foram cadastradas." />
-                ),
-            },
-            {
-              id: "local",
-              titulo: "Local",
-              conteudo: (
-                <div className="cartao p-5">
-                  <p className="titulo text-lg">{evento.local_nome ?? evento.cidade}</p>
-                  {evento.local_endereco && (
-                    <p className="mt-1 text-apagado">{evento.local_endereco}</p>
-                  )}
-                  {evento.local_mapa_url ? (
-                    <a
-                      href={evento.local_mapa_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="botao-secundario mt-4"
-                    >
-                      Abrir no mapa
-                    </a>
-                  ) : (
-                    <p className="mt-3 text-sm text-apagado">
-                      O endereço completo sai junto com a confirmação da inscrição.
-                    </p>
-                  )}
-                </div>
-              ),
-            },
-            {
-              id: "duvidas",
-              titulo: "Dúvidas",
-              conteudo:
-                duvidas && duvidas.length > 0 ? (
-                  <div className="cartao divide-y divide-linha">
-                    {duvidas.map((d) => (
-                      <details key={d.id} className="p-4">
-                        <summary className="cursor-pointer font-semibold text-tinta">
-                          {d.pergunta}
-                        </summary>
-                        <p className="mt-2 text-sm text-apagado">{d.resposta}</p>
-                      </details>
-                    ))}
-                  </div>
-                ) : (
-                  <Vazio texto="Ainda não temos perguntas cadastradas. Chama a diretoria no WhatsApp." />
-                ),
-            },
-          ]}
-        />
+        <Abas abas={abas} />
       </div>
 
       <Galeria eventoId={evento.id} limite={8} />

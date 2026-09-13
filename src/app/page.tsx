@@ -1,69 +1,96 @@
 import Link from "next/link";
-import { eventosPublicados, inscricoesAbertas, vagasRestantes } from "@/lib/eventos";
+import {
+  agendaCompleta,
+  daquiPraFrente,
+  hojeISO,
+  igrejasAtivas,
+  inscricoesAbertas,
+  eventoPorSlug,
+  vagasRestantes,
+} from "@/lib/eventos";
 import { formatarData, formatarReais } from "@/lib/validacao";
 import { Galeria } from "@/components/Galeria";
-import type { Evento } from "@/tipos/db";
+import { Calendario } from "@/components/Calendario";
+import { MapaIgrejas } from "@/components/MapaIgrejas";
+import { ROTULO_TIPO, type Igreja, type ItemAgenda } from "@/tipos/db";
 
-const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubig.oficial";
+const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubigoficial";
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export default async function Home() {
-  const eventos = await eventosPublicados();
-  const [destaque, ...proximos] = eventos;
+  const hoje = hojeISO();
+  const [agenda, igrejas] = await Promise.all([agendaCompleta(), igrejasAtivas()]);
+  const futuros = daquiPraFrente(agenda, hoje);
+  const destaque = futuros[0];
 
   return (
     <>
-      <Hero evento={destaque} />
+      <Hero item={destaque} />
+      <Atalhos temAgenda={agenda.length > 0} temIgrejas={igrejas.length > 0} />
       <QuemSomos />
-      {proximos.length > 0 && <Proximos eventos={proximos} />}
+      <Agenda agenda={agenda} hoje={hoje} />
+      <Onde igrejas={igrejas} />
       <Galeria limite={8} />
       <Contato />
     </>
   );
 }
 
-async function Hero({ evento }: { evento?: Evento }) {
-  if (!evento) {
+async function Hero({ item }: { item?: ItemAgenda }) {
+  if (!item) {
     return (
       <section className="mx-auto max-w-5xl px-4 py-20 text-center">
         <img src="/juca/feliz.webp" alt="" className="mx-auto w-36" />
         <h1 className="mt-4 text-4xl">A JUBIG está preparando o próximo encontro</h1>
         <p className="mt-3 text-apagado">
-          Assim que as datas fecharem, as inscrições aparecem aqui.
+          Assim que as datas fecharem, tudo aparece aqui no calendário.
         </p>
       </section>
     );
   }
 
-  const restantes = await vagasRestantes(evento);
-  const abertas = inscricoesAbertas(evento);
+  // O hero é o único lugar que precisa do evento inteiro: vagas e prazo.
+  const evento = await eventoPorSlug(item.slug);
+  const restantes = evento ? await vagasRestantes(evento) : null;
+  const abertas = evento ? inscricoesAbertas(evento) : false;
   const poucas = restantes !== null && restantes <= 20 && restantes > 0;
 
   return (
     <section className="border-b border-linha bg-areia">
       <div className="mx-auto grid max-w-5xl items-center gap-8 px-4 py-14 sm:grid-cols-[1.3fr_1fr]">
         <div>
-          <p className="text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
             Próximo encontro
+            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] normal-case">
+              {ROTULO_TIPO[item.tipo]}
+            </span>
           </p>
-          <h1 className="mt-2 text-4xl leading-tight sm:text-5xl">{evento.nome}</h1>
+          <h1 className="mt-2 text-4xl leading-tight sm:text-5xl">{item.nome}</h1>
           <p className="mt-3 text-lg text-apagado">
-            {formatarData(evento.data_evento)} · {evento.cidade}
+            {item.data_fim && item.data_fim !== item.data_evento
+              ? `${formatarData(item.data_evento)} a ${formatarData(item.data_fim)}`
+              : formatarData(item.data_evento)}{" "}
+            · {item.igreja_nome ?? item.cidade}
           </p>
-          {evento.descricao && <p className="mt-4 max-w-prose text-tinta/80">{evento.descricao}</p>}
+          {item.descricao && <p className="mt-4 max-w-prose text-tinta/80">{item.descricao}</p>}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            {abertas ? (
-              <Link href={`/${evento.slug}/inscricao`} className="botao-primario">
-                Inscrever — {formatarReais(evento.valor_centavos)} por pessoa
+            {item.tem_inscricao && abertas ? (
+              <Link href={`/${item.slug}/inscricao`} className="botao-primario">
+                Inscrever
+                {item.valor_centavos > 0 && ` — ${formatarReais(item.valor_centavos)} por pessoa`}
               </Link>
-            ) : (
+            ) : item.tem_inscricao ? (
               <span className="rounded-[10px] bg-tinta/10 px-5 py-3 font-semibold text-apagado">
                 Inscrições encerradas
               </span>
+            ) : (
+              <span className="rounded-[10px] bg-ok/10 px-5 py-3 font-semibold text-ok">
+                Entrada franca, é só chegar
+              </span>
             )}
-            <Link href={`/${evento.slug}`} className="botao-secundario">
-              Programação e local
+            <Link href={`/${item.slug}`} className="botao-secundario">
+              Ver detalhes
             </Link>
           </div>
 
@@ -73,7 +100,7 @@ async function Hero({ evento }: { evento?: Evento }) {
               Restam {restantes} vagas
             </p>
           )}
-          {evento.inscricoes_ate && abertas && (
+          {evento?.inscricoes_ate && abertas && item.tem_inscricao && (
             <p className="mt-3 text-sm text-apagado">
               Inscrições até {formatarData(evento.inscricoes_ate)}.
             </p>
@@ -90,9 +117,37 @@ async function Hero({ evento }: { evento?: Evento }) {
   );
 }
 
+/** Leva direto às seções de baixo — no celular, rolar tudo é longo. */
+function Atalhos({ temAgenda, temIgrejas }: { temAgenda: boolean; temIgrejas: boolean }) {
+  const itens = [
+    { href: "#quem-somos", titulo: "Quem somos", figura: "heh" },
+    temAgenda && { href: "#agenda", titulo: "Calendário", figura: "joia" },
+    temIgrejas && { href: "#onde", titulo: "Onde estamos", figura: "feliz" },
+    { href: "#contato", titulo: "Falar com a gente", figura: "choque" },
+  ].filter(Boolean) as { href: string; titulo: string; figura: string }[];
+
+  return (
+    <nav aria-label="Seções do site" className="mx-auto max-w-5xl px-4 pt-10">
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {itens.map((i) => (
+          <li key={i.href}>
+            <a
+              href={i.href}
+              className="cartao flex h-full items-center gap-2 p-3 transition hover:border-laranja"
+            >
+              <img src={`/juca/${i.figura}.webp`} alt="" className="h-9 w-9 object-contain" />
+              <span className="text-sm font-semibold text-tinta">{i.titulo}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 function QuemSomos() {
   return (
-    <section className="mx-auto max-w-5xl px-4 py-14">
+    <section id="quem-somos" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
       <h2 className="text-3xl">Quem somos</h2>
       <div className="mt-4 grid gap-6 sm:grid-cols-3">
         <p className="text-apagado sm:col-span-2">
@@ -101,36 +156,91 @@ function QuemSomos() {
           Assis Chateaubriand, passando pela tríplice fronteira.
         </p>
         <div className="cartao p-5">
-          <p className="titulo text-lg">Como participar</p>
-          <ol className="mt-2 space-y-1 text-sm text-apagado">
-            <li>1. Crie sua conta e confirme o e-mail</li>
-            <li>2. Inscreva você ou a caravana da igreja</li>
-            <li>3. Pague por PIX e envie o comprovante</li>
-            <li>4. A diretoria confirma sua vaga</li>
-          </ol>
+          <p className="titulo text-lg">O que a gente faz</p>
+          <ul className="mt-2 space-y-2 text-sm text-apagado">
+            <li>
+              <strong className="text-tinta">JubigDay</strong> — um dia inteiro de modalidades
+              esportivas, com inscrição por caravana.
+            </li>
+            <li>
+              <strong className="text-tinta">Congresso</strong> — vários dias de louvor e palavra,
+              com inscrição.
+            </li>
+            <li>
+              <strong className="text-tinta">JubigTour</strong> — a gente visita as igrejas da
+              união. Entrada franca.
+            </li>
+          </ul>
         </div>
       </div>
     </section>
   );
 }
 
-function Proximos({ eventos }: { eventos: Evento[] }) {
+function Agenda({ agenda, hoje }: { agenda: ItemAgenda[]; hoje: string }) {
+  if (agenda.length === 0) return null;
+  const futuros = daquiPraFrente(agenda, hoje).length;
+
   return (
-    <section className="mx-auto max-w-5xl px-4 py-8">
-      <h2 className="text-3xl">Próximos eventos</h2>
-      <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-        {eventos.map((e) => (
-          <li key={e.id} className="cartao p-5">
-            <p className="titulo text-lg">{e.nome}</p>
-            <p className="mt-1 text-sm text-apagado">
-              {formatarData(e.data_evento)} · {e.cidade}
+    <section id="agenda" className="mx-auto max-w-3xl scroll-mt-20 px-4 py-14">
+      <h2 className="text-3xl">Calendário</h2>
+      <p className="mt-2 text-apagado">
+        {futuros > 0
+          ? `${futuros} ${futuros === 1 ? "encontro marcado" : "encontros marcados"}. Tudo que já rolou fica abaixo.`
+          : "O que já rolou. As próximas datas aparecem aqui assim que fecharem."}
+      </p>
+      <Calendario itens={agenda} hoje={hoje} />
+    </section>
+  );
+}
+
+function Onde({ igrejas }: { igrejas: Igreja[] }) {
+  if (igrejas.length === 0) return null;
+
+  return (
+    <section id="onde" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
+      <h2 className="text-3xl">Onde estamos</h2>
+      <p className="mt-2 text-apagado">
+        {igrejas.length} {igrejas.length === 1 ? "igreja" : "igrejas"} batistas no oeste do Paraná.
+      </p>
+
+      <div className="mt-5">
+        <MapaIgrejas igrejas={igrejas} />
+      </div>
+
+      <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+        {igrejas.map((i) => (
+          <li key={i.id} className="cartao p-4">
+            <p className="font-semibold text-tinta">{i.nome}</p>
+            <p className="text-sm text-apagado">
+              {i.cidade} · {i.estado}
             </p>
-            <Link
-              href={`/${e.slug}`}
-              className="mt-3 inline-block text-sm font-semibold text-laranja-escuro hover:underline"
-            >
-              Ver detalhes
-            </Link>
+            {i.endereco && <p className="mt-1 text-sm text-apagado">{i.endereco}</p>}
+
+            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {i.endereco && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    `${i.nome}, ${i.endereco}, ${i.cidade}`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-laranja-escuro hover:underline"
+                >
+                  Como chegar
+                </a>
+              )}
+              {i.instagram && (
+                <a
+                  href={`https://instagram.com/${i.instagram}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-apagado hover:text-tinta hover:underline"
+                >
+                  @{i.instagram}
+                </a>
+              )}
+            </p>
           </li>
         ))}
       </ul>
@@ -140,7 +250,7 @@ function Proximos({ eventos }: { eventos: Evento[] }) {
 
 function Contato() {
   return (
-    <section className="mx-auto max-w-5xl px-4 py-14">
+    <section id="contato" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
       <div className="cartao flex flex-wrap items-center gap-6 p-7">
         <img src="/juca/heh.webp" alt="" className="w-24" />
         <div className="min-w-[240px] flex-1">
