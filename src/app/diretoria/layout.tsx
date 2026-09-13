@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { LinkNav } from "@/components/LinkNav";
 import { exigirDiretoria } from "@/lib/sessao";
 import { ROTULO_PAPEL } from "@/tipos/db";
 
@@ -34,13 +34,9 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
 
       <nav className="mt-5 flex gap-1 overflow-x-auto border-b border-linha">
         {abas.map((a) => (
-          <Link
-            key={a.href}
-            href={a.href}
-            className="shrink-0 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-apagado transition hover:border-laranja/40 hover:text-tinta"
-          >
+          <LinkNav key={a.href} href={a.href} className="shrink-0 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-apagado transition hover:border-laranja/40 hover:text-tinta">
             {a.titulo}
-          </Link>
+          </LinkNav>
         ))}
       </nav>
 

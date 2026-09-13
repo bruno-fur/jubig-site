@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Girando } from "./Girando";
 
 type Props = {
   email: string;
@@ -38,8 +39,10 @@ export function AvisoEmailNaoConfirmado({ email, variante = "topo" }: Props) {
     <button
       onClick={reenviar}
       disabled={estado === "enviando" || estado === "enviado"}
-      className="rounded-[10px] border-2 border-laranja-escuro px-4 py-2 text-sm font-semibold text-laranja-escuro disabled:opacity-50"
+      aria-busy={estado === "enviando"}
+      className="inline-flex items-center gap-2 rounded-[10px] border-2 border-laranja-escuro px-4 py-2 text-sm font-semibold text-laranja-escuro disabled:opacity-50"
     >
+      {estado === "enviando" && <Girando />}
       {rotulo}
     </button>
   );

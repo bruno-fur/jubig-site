@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Campo } from "@/components/Campo";
+import { Girando } from "@/components/Girando";
 import { ProvedorJuca } from "@/components/juca/contexto";
 import { JucaCanto } from "@/components/juca/Ancora";
 
@@ -75,8 +76,20 @@ function Miolo({ proximo }: { proximo: string }) {
           </p>
         )}
 
-        <button type="submit" disabled={enviando} className="botao-primario w-full">
-          {enviando ? "Entrando..." : "Entrar"}
+        <button
+          type="submit"
+          disabled={enviando}
+          aria-busy={enviando}
+          className="botao-primario w-full"
+        >
+          {enviando ? (
+            <>
+              <Girando />
+              Entrando...
+            </>
+          ) : (
+            "Entrar"
+          )}
         </button>
       </form>
 

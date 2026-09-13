@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ehDiretoria, type Sessao } from "@/lib/sessao";
 import { MenuConta } from "./MenuConta";
+import { LinkNav } from "./LinkNav";
 
 export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
   const diretoria = sessao ? await ehDiretoria(sessao.userId) : false;
@@ -22,19 +23,13 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
         <nav className="ml-auto flex items-center gap-1 text-sm">
           {sessao ? (
             <>
-              <Link
-                href="/minhas-inscricoes"
-                className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
-              >
+              <LinkNav href="/minhas-inscricoes" className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta">
                 Minhas inscrições
-              </Link>
+              </LinkNav>
               {diretoria && (
-                <Link
-                  href="/diretoria"
-                  className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
-                >
+                <LinkNav href="/diretoria" className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta">
                   Diretoria
-                </Link>
+                </LinkNav>
               )}
               <MenuConta email={sessao.email} nome={sessao.nome} />
             </>

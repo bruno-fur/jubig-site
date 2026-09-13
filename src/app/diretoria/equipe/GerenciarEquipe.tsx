@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Girando } from "@/components/Girando";
+import { Recado } from "@/components/Recado";
+import { useAcao } from "@/lib/useAcao";
 import { ROTULO_PAPEL, type MembroDiretoria, type Papel } from "@/tipos/db";
 
 const MENSAGEM: Record<string, string> = {
@@ -27,29 +29,14 @@ export function GerenciarEquipe({
   membros: MembroDiretoria[];
   euId: string;
 }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState<Papel>("membro");
-  const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const acao = useAcao({ mensagens: MENSAGEM, sucesso: "Acesso atualizado." });
+  const ocupado = acao.ocupado;
 
   async function chamar(metodo: "POST" | "PATCH" | "DELETE", corpo: unknown) {
-    setErro(null);
-    setOcupado(true);
-    const r = await fetch("/api/admin/equipe", {
-      method: metodo,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(corpo),
-    });
-    const dados = await r.json().catch(() => ({}));
-    setOcupado(false);
-
-    if (!r.ok) {
-      setErro(MENSAGEM[dados.erro as string] ?? "Não deu para salvar agora.");
-      return false;
-    }
-    router.refresh();
-    return true;
+    const { ok } = await acao.json("/api/admin/equipe", metodo, corpo);
+    return ok;
   }
 
   const admins = membros.filter((m) => m.papel === "admin").length;
@@ -86,15 +73,20 @@ export function GerenciarEquipe({
             <option value="admin">Administrador</option>
           </select>
           <button type="submit" disabled={ocupado} className="botao-primario">
-            Dar acesso
+            {ocupado ? (
+              <>
+                <Girando />
+                Salvando...
+              </>
+            ) : (
+              "Dar acesso"
+            )}
           </button>
         </form>
 
-        {erro && (
-          <p role="alert" className="mt-3 rounded-[10px] bg-ruim/10 px-4 py-3 text-sm font-medium text-ruim">
-            {erro}
-          </p>
-        )}
+        <div className="mt-3 empty:hidden">
+          <Recado erro={acao.erro} sucesso={acao.feito} aoFechar={acao.limpar} />
+        </div>
       </section>
 
       <section className="cartao mb-6 p-5">

@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Girando } from "@/components/Girando";
+import { Recado } from "@/components/Recado";
+import { useAcao } from "@/lib/useAcao";
 import { ORDEM_TURNO, ROTULO_TURNO, type Esporte, type Evento, type Turno } from "@/tipos/db";
 
 type Props = {
@@ -19,10 +22,9 @@ const MENSAGEM: Record<string, string> = {
 };
 
 export function GerenciarModalidades({ eventos, esportes, ocupacao }: Props) {
-  const router = useRouter();
   const [eventoId, setEventoId] = useState(eventos[0]?.id ?? "");
-  const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const acao = useAcao({ mensagens: MENSAGEM, sucesso: "Salvo." });
+  const ocupado = acao.ocupado;
 
   const evento = eventos.find((e) => e.id === eventoId);
   const doEvento = useMemo(
@@ -31,22 +33,8 @@ export function GerenciarModalidades({ eventos, esportes, ocupacao }: Props) {
   );
 
   async function chamar(metodo: "POST" | "PATCH" | "DELETE", corpo: unknown) {
-    setErro(null);
-    setOcupado(true);
-    const r = await fetch("/api/admin/modalidades", {
-      method: metodo,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(corpo),
-    });
-    const dados = await r.json().catch(() => ({}));
-    setOcupado(false);
-
-    if (!r.ok) {
-      setErro(MENSAGEM[dados.erro as string] ?? "Não deu para salvar agora.");
-      return false;
-    }
-    router.refresh();
-    return true;
+    const { ok } = await acao.json("/api/admin/modalidades", metodo, corpo);
+    return ok;
   }
 
   async function criar(ev: React.FormEvent<HTMLFormElement>) {
@@ -80,11 +68,9 @@ export function GerenciarModalidades({ eventos, esportes, ocupacao }: Props) {
         </select>
       )}
 
-      {erro && (
-        <p role="alert" className="mb-4 rounded-[10px] bg-ruim/10 px-4 py-3 text-sm font-medium text-ruim">
-          {erro}
-        </p>
-      )}
+      <div className="mb-4 empty:hidden">
+        <Recado erro={acao.erro} sucesso={acao.feito} aoFechar={acao.limpar} />
+      </div>
 
       {evento && <LimitePorTurno evento={evento} />}
 
@@ -110,7 +96,14 @@ export function GerenciarModalidades({ eventos, esportes, ocupacao }: Props) {
             className="campo-texto"
           />
           <button type="submit" disabled={ocupado} className="botao-primario">
-            Adicionar
+            {ocupado ? (
+              <>
+                <Girando />
+                Salvando...
+              </>
+            ) : (
+              "Adicionar"
+            )}
           </button>
           <label className="flex items-center gap-2 text-sm text-apagado sm:col-span-4">
             <input name="porEquipe" type="checkbox" className="h-4 w-4 accent-[#D94C1A]" />

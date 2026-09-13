@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CountryCode } from "libphonenumber-js";
 import { Campo } from "@/components/Campo";
@@ -9,6 +9,7 @@ import { ProvedorJuca } from "@/components/juca/contexto";
 import { JucaCanto } from "@/components/juca/Ancora";
 import type { EstadoJuca } from "@/components/juca/Juca";
 import { Etapas } from "@/components/Etapas";
+import { Girando } from "@/components/Girando";
 import { EscolhaEsportes } from "@/components/EscolhaEsportes";
 import { dataParaISO } from "@/lib/mascaras";
 import { formatarReais, idadeNaData, nomeCompleto, validarCPF, dataValida } from "@/lib/validacao";
@@ -81,6 +82,7 @@ function Miolo({
   const router = useRouter();
 
   const [etapa, setEtapa] = useState(0);
+  const topo = useRef<HTMLDivElement>(null);
   const [pessoas, setPessoas] = useState<Pessoa[]>(() => [
     { ...pessoaVazia(perfil.igreja), nome: perfil.nome },
   ]);
@@ -144,17 +146,27 @@ function Miolo({
     return Object.keys(e).length === 0;
   }
 
+  /*
+   * Rolar para o topo não basta: quem usa leitor de tela ou teclado continua
+   * com o foco no botão da etapa anterior, que agora mostra outra coisa. O
+   * foco vai para o cabeçalho da etapa nova, e a leitura recomeça dali.
+   */
+  function irPara(n: number) {
+    setErroGeral(null);
+    setEtapa(n);
+    topo.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function avancar() {
     setErroGeral(null);
     if (etapa === 0 && !conferirPessoas()) return;
     if (etapa === 1 && temEsportes && !conferirEsportes()) return;
-    setEtapa((n) => Math.min(n + 1, ETAPAS.length - 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    irPara(Math.min(etapa + 1, ETAPAS.length - 1));
   }
 
   function voltar() {
-    setErroGeral(null);
-    setEtapa((n) => Math.max(n - 1, 0));
+    irPara(Math.max(etapa - 1, 0));
   }
 
   async function enviar() {
@@ -213,7 +225,9 @@ function Miolo({
 
   return (
     <>
-      <Etapas titulos={ETAPAS} atual={etapa} />
+      <div ref={topo} tabIndex={-1} className="focus-visible:outline-none">
+        <Etapas titulos={ETAPAS} atual={etapa} />
+      </div>
 
       {erroGeral && (
         <p role="alert" className="mt-6 rounded-[10px] bg-ruim/10 px-4 py-3 text-sm font-medium text-ruim">
@@ -290,8 +304,21 @@ function Miolo({
             Continuar
           </button>
         ) : (
-          <button type="button" onClick={enviar} disabled={enviando} className="botao-primario flex-1">
-            {enviando ? "Registrando..." : `Registrar inscrição — ${formatarReais(total)}`}
+          <button
+            type="button"
+            onClick={enviar}
+            disabled={enviando}
+            aria-busy={enviando}
+            className="botao-primario flex-1"
+          >
+            {enviando ? (
+              <>
+                <Girando />
+                Registrando...
+              </>
+            ) : (
+              `Registrar inscrição — ${formatarReais(total)}`
+            )}
           </button>
         )}
       </div>

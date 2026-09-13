@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { CountryCode } from "libphonenumber-js";
 import { criarClienteNavegador } from "@/lib/supabase/client";
 import { Campo } from "@/components/Campo";
+import { Girando } from "@/components/Girando";
 import { CampoTelefone } from "@/components/CampoTelefone";
 import { ProvedorJuca } from "@/components/juca/contexto";
 import { JucaCanto } from "@/components/juca/Ancora";
@@ -185,8 +186,20 @@ function Miolo() {
           </p>
         )}
 
-        <button type="submit" disabled={enviando} className="botao-primario w-full">
-          {enviando ? "Criando..." : "Criar conta"}
+        <button
+          type="submit"
+          disabled={enviando}
+          aria-busy={enviando}
+          className="botao-primario w-full"
+        >
+          {enviando ? (
+            <>
+              <Girando />
+              Criando...
+            </>
+          ) : (
+            "Criar conta"
+          )}
         </button>
       </form>
 

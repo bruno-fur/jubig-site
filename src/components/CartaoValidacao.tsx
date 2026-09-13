@@ -1,9 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Girando } from "./Girando";
+import { Recado } from "./Recado";
+import { useAcao } from "@/lib/useAcao";
 
 type Pessoa = { nome: string; cpf: string; igreja: string };
+
+const MENSAGEM: Record<string, string> = {
+  motivo_obrigatorio: "Escreva o motivo da recusa.",
+  nada_pendente: "Esse comprovante já foi avaliado por outra pessoa.",
+  nao_encontrada: "Inscrição não encontrada.",
+  sem_permissao: "Você não tem acesso para validar.",
+};
 
 export function CartaoValidacao({
   codigo,
@@ -24,36 +33,22 @@ export function CartaoValidacao({
   url: string | null;
   pessoas: Pessoa[];
 }) {
-  const router = useRouter();
   const [recusando, setRecusando] = useState(false);
   const [motivo, setMotivo] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
+  const [motivoCurto, setMotivoCurto] = useState(false);
+  const acao = useAcao({ mensagens: MENSAGEM });
 
   async function decidir(aprovado: boolean) {
-    setErro(null);
+    setMotivoCurto(false);
     if (!aprovado && motivo.trim().length < 5) {
-      setErro("Escreva o motivo — ele vai no e-mail para a pessoa.");
+      setMotivoCurto(true);
       return;
     }
-
-    setEnviando(true);
-    const r = await fetch("/api/admin/validar", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ codigo, aprovado, motivo: motivo.trim() }),
-    });
-    setEnviando(false);
-
-    if (!r.ok) {
-      setErro("Não deu para salvar. Tente de novo.");
-      return;
-    }
-    router.refresh();
+    await acao.json("/api/admin/validar", "POST", { codigo, aprovado, motivo: motivo.trim() });
   }
 
   return (
-    <article className="cartao overflow-hidden">
+    <article className="cartao overflow-hidden" aria-busy={acao.ocupado}>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-linha p-4">
         <div>
           <p className="titulo text-lg">{codigo}</p>
@@ -96,6 +91,7 @@ export function CartaoValidacao({
               <img
                 src={url}
                 alt={`Comprovante da inscrição ${codigo}`}
+                loading="lazy"
                 className="max-h-56 w-full rounded-[10px] border border-linha bg-areia object-contain"
               />
               <span className="mt-1 block text-sm font-semibold text-laranja-escuro">
@@ -118,31 +114,44 @@ export function CartaoValidacao({
             </label>
             <textarea
               value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
+              onChange={(e) => {
+                setMotivo(e.target.value);
+                setMotivoCurto(false);
+              }}
               rows={2}
+              autoFocus
               placeholder="Ex.: o valor do PIX está menor que o da inscrição."
-              className="campo-texto"
+              className={`campo-texto ${motivoCurto ? "border-ruim" : ""}`}
             />
-            <p className="mt-1 text-xs text-apagado">
-              Este texto vai inteiro no e-mail para a pessoa.
+            <p className={`mt-1 text-xs ${motivoCurto ? "text-ruim" : "text-apagado"}`}>
+              {motivoCurto
+                ? "Escreva o motivo — ele vai inteiro no e-mail para a pessoa."
+                : "Este texto vai inteiro no e-mail para a pessoa."}
             </p>
           </div>
         )}
 
-        {erro && (
-          <p role="alert" className="mb-3 text-sm font-medium text-ruim">
-            {erro}
-          </p>
+        {acao.erro && (
+          <div className="mb-3">
+            <Recado erro={acao.erro} />
+          </div>
         )}
 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => decidir(true)}
-            disabled={enviando || recusando}
+            disabled={acao.ocupado || recusando}
             className="botao-primario flex-1 bg-ok hover:bg-ok/85"
           >
-            {enviando ? "Salvando..." : "Aprovar"}
+            {acao.ocupado && !recusando ? (
+              <>
+                <Girando />
+                {acao.atualizando ? "Atualizando..." : "Salvando..."}
+              </>
+            ) : (
+              "Aprovar"
+            )}
           </button>
 
           {recusando ? (
@@ -150,16 +159,25 @@ export function CartaoValidacao({
               <button
                 type="button"
                 onClick={() => decidir(false)}
-                disabled={enviando}
+                disabled={acao.ocupado}
                 className="botao-primario flex-1 bg-ruim hover:bg-ruim/85"
               >
-                Confirmar recusa
+                {acao.ocupado ? (
+                  <>
+                    <Girando />
+                    Salvando...
+                  </>
+                ) : (
+                  "Confirmar recusa"
+                )}
               </button>
               <button
                 type="button"
+                disabled={acao.ocupado}
                 onClick={() => {
                   setRecusando(false);
-                  setErro(null);
+                  setMotivoCurto(false);
+                  acao.limpar();
                 }}
                 className="botao-secundario"
               >
@@ -167,7 +185,12 @@ export function CartaoValidacao({
               </button>
             </>
           ) : (
-            <button type="button" onClick={() => setRecusando(true)} className="botao-secundario">
+            <button
+              type="button"
+              disabled={acao.ocupado}
+              onClick={() => setRecusando(true)}
+              className="botao-secundario"
+            >
               Recusar
             </button>
           )}
