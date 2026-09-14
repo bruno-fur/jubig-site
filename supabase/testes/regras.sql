@@ -1059,4 +1059,110 @@ end $$;
 
 set role postgres;
 
+-- ============================================================
+-- Formatos de modalidade: oficina, dupla, trio e time sorteado
+-- ============================================================
+set role postgres;
+update eventos set max_esportes_por_turno = 0 where slug = 'jubigday-2026';
+
+insert into esportes (evento_id, nome, turno, vagas, categoria, formato, responsavel)
+select ev.id, x.nome, x.turno, 20, x.categoria, x.formato, x.resp
+  from eventos ev, (values
+    ('Oficina Financas', 'manha', 'oficina', 'individual', 'Thais'),
+    ('Oficina Louvor',   'manha', 'oficina', 'individual', null),
+    ('Volei Sorteado',   'tarde', 'esporte', 'time_sorteado', null),
+    ('Volei de Dupla',   'tarde', 'esporte', 'dupla', null),
+    ('Basquete Trio',    'noite', 'esporte', 'trio', null)
+  ) as x(nome, turno, categoria, formato, resp)
+ where ev.slug = 'jubigday-2026';
+
+create or replace function pessoa_teste(p_nome text, p_cpf text, p_esportes jsonb) returns jsonb
+language sql as $f$
+  select jsonb_build_array(jsonb_build_object(
+    'nome', p_nome, 'cpf', p_cpf, 'nascimento', '2000-01-01',
+    'igrejaId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'deBoa', false, 'esportes', p_esportes))
+$f$;
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+declare
+  v_sort uuid; v_dupla uuid; v_trio uuid; v_of1 uuid; v_of2 uuid; v_cod text;
+begin
+  select id into v_sort  from esportes where nome = 'Volei Sorteado';
+  select id into v_dupla from esportes where nome = 'Volei de Dupla';
+  select id into v_trio  from esportes where nome = 'Basquete Trio';
+  select id into v_of1   from esportes where nome = 'Oficina Financas';
+  select id into v_of2   from esportes where nome = 'Oficina Louvor';
+
+  perform espera_erro(
+    format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
+      pessoa_teste('Sem Nota', '71428793860', jsonb_build_array(v_sort))::text),
+    'nota_obrigatoria', 'time sorteado sem nota de habilidade recusado');
+
+  v_cod := criar_inscricao('jubigday-2026', 1, pessoa_teste('Com Nota', '71428793860',
+    jsonb_build_array(jsonb_build_object('id', v_sort, 'nota', 4))));
+  if (select ie.nota from inscritos_esportes ie join inscritos i on i.id = ie.inscrito_id
+       where i.nome = 'Com Nota') is distinct from 4::smallint then
+    raise exception 'FALHOU — nota de habilidade nao ficou gravada';
+  end if;
+  raise notice 'ok    time sorteado grava a nota de habilidade (%)', v_cod;
+
+  perform espera_erro(
+    format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
+      pessoa_teste('Dupla Sozinha', '83674281059',
+        jsonb_build_array(jsonb_build_object('id', v_dupla, 'parceiros', jsonb_build_array('  '))))::text),
+    'parceiros_obrigatorios', 'dupla sem parceiro recusada');
+
+  perform espera_erro(
+    format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
+      pessoa_teste('Trio Incompleto', '83674281059',
+        jsonb_build_array(jsonb_build_object('id', v_trio, 'parceiros', jsonb_build_array('Ana Lima'))))::text),
+    'parceiros_obrigatorios', 'trio com um parceiro so recusado');
+
+  v_cod := criar_inscricao('jubigday-2026', 1, pessoa_teste('Dupla Completa', '83674281059',
+    jsonb_build_array(jsonb_build_object('id', v_dupla, 'parceiros', jsonb_build_array(' Ana Lima ', 'Sobrando')))));
+  if (select ie.parceiros from inscritos_esportes ie join inscritos i on i.id = ie.inscrito_id
+       where i.nome = 'Dupla Completa') is distinct from array['Ana Lima'] then
+    raise exception 'FALHOU — dupla deveria gravar so um parceiro, limpo';
+  end if;
+  raise notice 'ok    dupla grava o nome do parceiro (%)', v_cod;
+
+  perform espera_erro(
+    format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
+      pessoa_teste('Duas Oficinas', '62648716050', jsonb_build_array(v_of1, v_of2))::text),
+    'oficina_mesmo_turno', 'duas oficinas no mesmo turno recusadas');
+
+  v_cod := criar_inscricao('jubigday-2026', 1, pessoa_teste('Uma Oficina', '62648716050',
+    jsonb_build_array(jsonb_build_object('id', v_of1, 'nota', 5))));
+  if (select ie.nota from inscritos_esportes ie join inscritos i on i.id = ie.inscrito_id
+       where i.nome = 'Uma Oficina') is not null then
+    raise exception 'FALHOU — oficina nao deveria guardar nota';
+  end if;
+  raise notice 'ok    oficina entra e descarta nota (%)', v_cod;
+
+  perform espera_erro(
+    format($x$ select trocar_escolhas(%L::uuid, %L::jsonb, false) $x$,
+      (select id from inscritos where nome = 'Uma Oficina'),
+      jsonb_build_array(jsonb_build_object('id', v_sort))::text),
+    'nota_obrigatoria', 'troca para time sorteado sem nota recusada');
+
+  if not exists (select 1 from inscritos_esportes ie join inscritos i on i.id = ie.inscrito_id
+                  where i.nome = 'Uma Oficina' and ie.esporte_id = v_of1) then
+    raise exception 'FALHOU — troca recusada apagou a escolha antiga';
+  end if;
+  raise notice 'ok    troca recusada mantem a escolha antiga';
+
+  perform trocar_escolhas((select id from inscritos where nome = 'Uma Oficina'),
+    jsonb_build_array(jsonb_build_object('id', v_sort, 'nota', 2)), false);
+  if (select ie.nota from inscritos_esportes ie join inscritos i on i.id = ie.inscrito_id
+       where i.nome = 'Uma Oficina' and ie.esporte_id = v_sort) is distinct from 2::smallint then
+    raise exception 'FALHOU — troca com nota deveria gravar';
+  end if;
+  raise notice 'ok    troca para time sorteado com nota grava';
+end $$;
+
+set role postgres;
+
 select 'TODOS OS TESTES PASSARAM' as resultado;

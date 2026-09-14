@@ -60,6 +60,22 @@ export type Evento = {
   publicado: boolean;
 };
 
+/** Esporte no JubigDay; oficina ou estudo no Congresso. */
+export type CategoriaModalidade = "esporte" | "oficina";
+
+/** O que a pessoa informa ao escolher: nada, parceiros ou nota de habilidade. */
+export type FormatoModalidade = "individual" | "dupla" | "trio" | "time_sorteado";
+
+export const ROTULO_FORMATO: Record<FormatoModalidade, string> = {
+  individual: "Individual",
+  dupla: "Dupla",
+  trio: "Trio",
+  time_sorteado: "Time sorteado",
+};
+
+/** Detalhe de uma escolha: nota (time sorteado) ou parceiros (dupla, trio). */
+export type DetalheEscolha = { nota?: number | null; parceiros?: string[] | null };
+
 export type Esporte = {
   id: string;
   evento_id: string;
@@ -67,6 +83,12 @@ export type Esporte = {
   turno: Turno;
   vagas: number;
   por_equipe: boolean;
+  /** Opcionais só até o schema novo rodar em produção. */
+  categoria?: CategoriaModalidade;
+  formato?: FormatoModalidade;
+  descricao?: string | null;
+  /** Quem conduz a oficina. */
+  responsavel?: string | null;
   ordem: number;
 };
 
@@ -76,6 +98,12 @@ export type VagaEsporte = {
   nome: string;
   turno: Turno;
   por_equipe: boolean;
+  /** Opcionais só até o schema novo rodar em produção. */
+  categoria?: CategoriaModalidade;
+  formato?: FormatoModalidade;
+  descricao?: string | null;
+  /** Quem conduz a oficina. */
+  responsavel?: string | null;
   ordem: number;
   vagas: number;
   ocupadas: number;

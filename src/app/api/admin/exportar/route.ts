@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { pegarSessao } from "@/lib/sessao";
 import { formatarCPF, formatarDataCurta, idadeNaData } from "@/lib/validacao";
 import { ROTULO_STATUS, ROTULO_TURNO, type StatusInscricao, type Turno } from "@/tipos/db";
+import { descreverEscolha } from "@/lib/modalidades";
 
 /**
  * CSV para a diretoria montar as chaves e conferir a caravana.
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
   const { data: inscritos } = await supabase
     .from("inscritos")
     .select(
-      "nome, cpf, nascimento, telefone, igreja, de_boa, inscricoes(codigo, status, parcelas, valor_centavos, criado_em), inscritos_esportes(esportes(id, nome, turno))"
+      "nome, cpf, nascimento, telefone, igreja, de_boa, inscricoes(codigo, status, parcelas, valor_centavos, criado_em), inscritos_esportes(*, esportes(id, nome, turno))"
     )
     .eq("evento_id", evento.id)
     .order("nome", { ascending: true });
@@ -55,7 +56,11 @@ export async function GET(req: NextRequest) {
       valor_centavos: number;
       criado_em: string;
     };
-    inscritos_esportes: { esportes: { id: string; nome: string; turno: Turno } }[];
+    inscritos_esportes: {
+      nota?: number | null;
+      parceiros?: string[] | null;
+      esportes: { id: string; nome: string; turno: Turno };
+    }[];
   };
 
   let linhas = (inscritos ?? []) as unknown as Linha[];
@@ -89,7 +94,11 @@ export async function GET(req: NextRequest) {
       l.igreja,
       l.telefone ?? "",
       l.inscritos_esportes
-        .map((e) => (e.esportes ? `${e.esportes.nome} (${ROTULO_TURNO[e.esportes.turno]})` : ""))
+        .map((e) =>
+          e.esportes
+            ? [`${e.esportes.nome} (${ROTULO_TURNO[e.esportes.turno]})`, descreverEscolha(e)].filter(Boolean).join(" — ")
+            : ""
+        )
         .filter(Boolean)
         .join(" | "),
       l.de_boa ? "sim" : "nao",

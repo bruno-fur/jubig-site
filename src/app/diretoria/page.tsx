@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { exigirDiretoria } from "@/lib/sessao";
 import { createClient } from "@/lib/supabase/server";
 import { eventosPublicados, esportesDoEvento } from "@/lib/eventos";
@@ -113,10 +114,10 @@ export default async function VisaoGeral() {
               return (
                 <li key={m.esporte_id} className="px-4 py-3">
                   <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="font-semibold text-tinta">
+                    <Link href={`/diretoria/modalidades/${m.esporte_id}`} className="font-semibold text-tinta hover:underline">
                       {m.nome}{" "}
                       <span className="font-normal text-apagado">· {ROTULO_TURNO[m.turno]}</span>
-                    </span>
+                    </Link>
                     <span className={m.restantes === 0 ? "text-ruim" : "text-apagado"}>
                       {m.ocupadas}/{m.vagas}
                     </span>

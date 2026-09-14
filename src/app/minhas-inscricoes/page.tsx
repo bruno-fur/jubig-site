@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AvisoEmailNaoConfirmado } from "@/components/AvisoEmailNaoConfirmado";
 import { SeloStatus } from "@/components/SeloStatus";
 import { TrocaEsporte } from "@/components/TrocaEsporte";
+import { descreverEscolha } from "@/lib/modalidades";
 import { agruparPorTurno, esportesDoEvento, hojeISO } from "@/lib/eventos";
 import { formatarData, formatarReais, cpfMascarado } from "@/lib/validacao";
 import { ROTULO_TURNO, type Comprovante, type Evento, type Inscricao, type Inscrito, type VagaEsporte } from "@/tipos/db";
@@ -13,7 +14,9 @@ export const metadata: Metadata = { title: "Minhas inscrições" };
 
 type Linha = Inscricao & {
   eventos: Evento;
-  inscritos: (Inscrito & { inscritos_esportes: { esporte_id: string }[] })[];
+  inscritos: (Inscrito & {
+    inscritos_esportes: { esporte_id: string; nota?: number | null; parceiros?: string[] | null }[];
+  })[];
   comprovantes: Comprovante[];
 };
 
@@ -31,7 +34,7 @@ export default async function MinhasInscricoes() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("inscricoes")
-    .select("*, eventos(*), inscritos(*, inscritos_esportes(esporte_id)), comprovantes(*)")
+    .select("*, eventos(*), inscritos(*, inscritos_esportes(*)), comprovantes(*)")
     /*
      * Filtro explícito pelo dono, além da RLS.
      *
@@ -109,7 +112,7 @@ export default async function MinhasInscricoes() {
                         <span className="text-apagado">Vai só de boa, sem competir.</span>
                       ) : (
                         p.inscritos_esportes
-                          .map((e) => nomeEsporte.get(e.esporte_id) ?? "—")
+                          .map((e) => [nomeEsporte.get(e.esporte_id) ?? "—", descreverEscolha(e)].filter(Boolean).join(" — "))
                           .join(", ") || <span className="text-apagado">Sem modalidade.</span>
                       )}
                     </p>
@@ -120,7 +123,11 @@ export default async function MinhasInscricoes() {
                         inscritoId={p.id}
                         nome={p.nome}
                         grupos={agruparPorTurno(esportes)}
-                        atuais={p.inscritos_esportes.map((e) => e.esporte_id)}
+                        atuais={p.inscritos_esportes.map((e) => ({
+                          id: e.esporte_id,
+                          nota: e.nota ?? null,
+                          parceiros: e.parceiros ?? null,
+                        }))}
                         deBoa={p.de_boa}
                         prazo={formatarData(prazoTroca)}
                         maxPorTurno={i.eventos.max_esportes_por_turno ?? 0}

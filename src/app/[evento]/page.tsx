@@ -6,7 +6,8 @@ import { formatarData } from "@/lib/validacao";
 import { ChamadaEvento } from "@/components/ChamadaEvento";
 import { Abas } from "@/components/Abas";
 import { Galeria } from "@/components/Galeria";
-import { ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
+import { ROTULO_FORMATO, ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
+import { rotuloModalidades } from "@/lib/modalidades";
 
 export async function generateMetadata({
   params,
@@ -84,7 +85,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     },
     evento.tem_modalidades && {
       id: "modalidades",
-      titulo: "Modalidades",
+      titulo: rotuloModalidades(esportes).plural,
       conteudo:
         esportes.length > 0 ? (
           <div className="space-y-5">
@@ -97,7 +98,18 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
                       key={e.esporte_id}
                       className="flex items-center justify-between gap-2 rounded-[10px] border border-linha bg-white p-3 text-sm"
                     >
-                      <span className="font-semibold text-tinta">{e.nome}</span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-tinta">{e.nome}</span>
+                        <span className="block text-xs text-apagado">
+                          {[
+                            e.categoria === "oficina" && e.responsavel && `com ${e.responsavel}`,
+                            e.categoria !== "oficina" && e.formato && e.formato !== "individual" && ROTULO_FORMATO[e.formato],
+                            e.descricao,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
                       <span className={e.restantes <= 0 ? "text-ruim" : "text-apagado"}>
                         {e.restantes <= 0 ? "lotada" : `${e.restantes} vagas`}
                       </span>

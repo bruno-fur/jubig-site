@@ -14,7 +14,8 @@ import { EscolhaEsportes } from "@/components/EscolhaEsportes";
 import { CampoIgreja } from "@/components/CampoIgreja";
 import { dataParaISO } from "@/lib/mascaras";
 import { formatarReais, idadeNaData, nomeCompleto, validarCPF, dataValida } from "@/lib/validacao";
-import { ROTULO_TURNO, type OpcaoIgreja, type Turno, type VagaEsporte } from "@/tipos/db";
+import { ROTULO_TURNO, type DetalheEscolha, type OpcaoIgreja, type Turno, type VagaEsporte } from "@/tipos/db";
+import { descreverEscolha, escolhaParaEnvio, problemaDaEscolha, rotuloModalidades } from "@/lib/modalidades";
 
 type EventoResumo = {
   slug: string;
@@ -39,6 +40,8 @@ type Pessoa = {
   e164: string | null;
   deBoa: boolean;
   esportes: string[];
+  /** Nota ou parceiros de cada escolha, pelo id da modalidade. */
+  detalhes: Record<string, DetalheEscolha>;
 };
 
 type Etapa = "pessoas" | "esportes" | "conferir";
@@ -74,6 +77,7 @@ function pessoaVazia(igrejaId = ""): Pessoa {
     e164: null,
     deBoa: false,
     esportes: [],
+    detalhes: {},
   };
 }
 
@@ -119,6 +123,10 @@ function Miolo({
   const [enviando, setEnviando] = useState(false);
 
   const temEsportes = evento.temModalidades && grupos.length > 0;
+  const modalidades = useMemo(() => grupos.flatMap(([, lista]) => lista), [grupos]);
+  const porId = useMemo(() => new Map(modalidades.map((m) => [m.esporte_id, m])), [modalidades]);
+  // "Esportes" no JubigDay, "Oficinas" no Congresso.
+  const rotulo = rotuloModalidades(modalidades);
   const total = evento.valorCentavos * pessoas.length;
   const poucasVagas = vagasRestantes !== null && vagasRestantes > 0 && vagasRestantes <= 20;
 
@@ -166,8 +174,19 @@ function Miolo({
   function conferirEsportes() {
     const e: Record<string, string> = {};
     pessoas.forEach((p, i) => {
-      if (!p.deBoa && p.esportes.length === 0)
-        e[`${i}.esportes`] = "Escolha ao menos uma modalidade ou marque “vou só de boa”.";
+      if (!p.deBoa && p.esportes.length === 0) {
+        e[`${i}.esportes`] = `Escolha ao menos uma ${rotulo.singular} ou marque “${rotulo.deBoa}”.`;
+        return;
+      }
+      if (p.deBoa) return;
+      // Nota do time sorteado, parceiros da dupla/trio: mesma regra do banco.
+      const problema = p.esportes
+        .map((id) => {
+          const m = porId.get(id);
+          return m ? problemaDaEscolha(m, p.detalhes[id]) : null;
+        })
+        .find(Boolean);
+      if (problema) e[`${i}.esportes`] = problema;
     });
     setErros(e);
     return Object.keys(e).length === 0;
@@ -213,7 +232,9 @@ function Miolo({
           telefone: p.e164 ?? "",
           igrejaId: p.igrejaId,
           deBoa: p.deBoa,
-          esportes: p.deBoa ? [] : p.esportes,
+          esportes: p.deBoa
+            ? []
+            : p.esportes.map((id) => escolhaParaEnvio(id, porId.get(id) ?? { nome: "" }, p.detalhes[id])),
         })),
       }),
     });
@@ -232,7 +253,7 @@ function Miolo({
         irPara("pessoas");
       else if (
         temEsportes &&
-        ["modalidade_lotada", "limite_no_turno", "sem_escolha"].includes(corpo.erro)
+        ["modalidade_lotada", "limite_no_turno", "sem_escolha", "nota_obrigatoria", "parceiros_obrigatorios", "oficina_mesmo_turno"].includes(corpo.erro)
       )
         irPara("esportes");
       return;
@@ -260,7 +281,10 @@ function Miolo({
   return (
     <>
       <div ref={topo} tabIndex={-1} className="focus-visible:outline-none">
-        <Etapas titulos={[...etapas.map((e) => TITULO[e]), "Pagamento"]} atual={posicao} />
+        <Etapas
+          titulos={[...etapas.map((e) => (e === "esportes" ? rotulo.plural : TITULO[e])), "Pagamento"]}
+          atual={posicao}
+        />
       </div>
 
       {erroGeral && (
@@ -309,6 +333,8 @@ function Miolo({
                 deBoa={p.deBoa}
                 maxPorTurno={evento.maxEsportesPorTurno}
                 erro={erros[`${i}.esportes`]}
+                detalhes={p.detalhes}
+                aoDetalhar={(id, d) => mexer(i, { detalhes: { ...p.detalhes, [id]: d } })}
                 aoEscolher={(esportes) => mexer(i, { esportes, deBoa: false })}
                 aoMarcarDeBoa={(deBoa) => mexer(i, { deBoa, esportes: deBoa ? [] : p.esportes })}
               />
@@ -501,7 +527,9 @@ function Conferencia({
               {p.deBoa ? (
                 <span className="text-apagado">Vai só de boa, sem competir.</span>
               ) : (
-                p.esportes.map((id) => nomeDoEsporte.get(id) ?? id).join(", ")
+                p.esportes
+                  .map((id) => [nomeDoEsporte.get(id) ?? id, descreverEscolha(p.detalhes[id])].filter(Boolean).join(" — "))
+                  .join(", ")
               )}
             </p>
           </div>
@@ -548,7 +576,13 @@ function Conferencia({
   );
 }
 
-function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: number; mensagem?: string }) {
+function mensagemDeErro(corpo: {
+  erro?: string;
+  inscrito?: string;
+  modalidade?: string;
+  minima?: number;
+  mensagem?: string;
+}) {
   const quem = corpo.inscrito ? ` (${corpo.inscrito})` : "";
   switch (corpo.erro) {
     case "email_nao_confirmado":
@@ -569,6 +603,12 @@ function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: numb
       return `Idade mínima de ${corpo.minima ?? 12} anos na data do evento${quem}.`;
     case "sem_escolha":
       return `Falta escolher a modalidade ou marcar "vou só de boa"${quem}.`;
+    case "nota_obrigatoria":
+      return `Falta a nota de habilidade em ${corpo.modalidade ?? "um esporte"}.`;
+    case "parceiros_obrigatorios":
+      return `Faltam os nomes dos parceiros em ${corpo.modalidade ?? "um esporte"}.`;
+    case "oficina_mesmo_turno":
+      return "Só dá para fazer uma oficina por turno.";
     case "modalidade_lotada":
       return "Uma das modalidades lotou enquanto você preenchia. Escolha outra.";
     case "limite_no_turno":

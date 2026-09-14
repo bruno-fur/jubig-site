@@ -18,6 +18,7 @@ import { ListaComprovantes } from "@/components/ListaComprovantes";
 import { CancelarInscricao } from "@/components/CancelarInscricao";
 import { CartaoValidacao } from "@/components/CartaoValidacao";
 import { ROTULO_TURNO, type Comprovante, type Inscricao, type Turno } from "@/tipos/db";
+import { descreverEscolha } from "@/lib/modalidades";
 
 export const metadata: Metadata = { title: "Inscrição", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -33,7 +34,11 @@ type Linha = Inscricao & {
     igreja: string;
     de_boa: boolean;
     checkin_em?: string | null;
-    inscritos_esportes: { esportes: { nome: string; turno: Turno } | null }[];
+    inscritos_esportes: {
+      nota?: number | null;
+      parceiros?: string[] | null;
+      esportes: { nome: string; turno: Turno } | null;
+    }[];
   }[];
   comprovantes: Comprovante[];
 };
@@ -47,7 +52,7 @@ export default async function DetalheInscricao({ params }: { params: Promise<{ c
   const { data } = await supabase
     .from("inscricoes")
     .select(
-      "*, eventos(nome, slug, data_evento), inscritos(*, inscritos_esportes(esportes(nome, turno))), comprovantes(*)"
+      "*, eventos(nome, slug, data_evento), inscritos(*, inscritos_esportes(*, esportes(nome, turno))), comprovantes(*)"
     )
     .eq("codigo", codigo.toUpperCase())
     .maybeSingle();
@@ -134,7 +139,11 @@ export default async function DetalheInscricao({ params }: { params: Promise<{ c
               {p.de_boa
                 ? "Vai só de boa"
                 : p.inscritos_esportes
-                    .map((x) => (x.esportes ? `${x.esportes.nome} (${ROTULO_TURNO[x.esportes.turno]})` : ""))
+                    .map((x) =>
+                      x.esportes
+                        ? [`${x.esportes.nome} (${ROTULO_TURNO[x.esportes.turno]})`, descreverEscolha(x)].filter(Boolean).join(" — ")
+                        : ""
+                    )
                     .filter(Boolean)
                     .join(", ") || "Sem modalidade"}
             </p>

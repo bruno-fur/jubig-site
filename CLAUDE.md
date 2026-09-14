@@ -18,7 +18,7 @@ JubigDay era o erro original:
 | Tipo | Inscrição | Modalidades | Exemplo |
 |---|---|---|---|
 | `jubigday` | sim, paga | sim | JubigDay, 17/10/2026 |
-| `congresso` | sim, paga | **não** | Congresso de Carnaval, 6–9/02/2027 |
+| `congresso` | sim, paga | **oficinas** | Congresso de Carnaval, 6–9/02/2027 |
 | `tour` | **não**, entrada franca | não | JubigTour — visita a uma igreja |
 
 As duas capacidades são colunas (`tem_inscricao`, `tem_modalidades`), não
@@ -212,6 +212,17 @@ garante que sempre sobre ao menos um admin.
       "Próximo ingresso" ou "Sair"
 - [x] Meu perfil: nome, igreja, telefone, senha. Trigger `proteger_perfil`
       impede a pessoa de confirmar o próprio e-mail por update direto
+
+### 9. Modalidade é esporte ou oficina
+- [x] `esportes.categoria`: `esporte` (JubigDay) ou `oficina` (Congresso,
+      com `responsavel` e `descricao`). Oficina é **uma por turno**, sempre
+- [x] `esportes.formato` (só esporte): `individual`, `dupla`/`trio` (a pessoa
+      escreve os parceiros em `inscritos_esportes.parceiros`) ou
+      `time_sorteado` (nota 1–5 de habilidade em `inscritos_esportes.nota`)
+- [x] O trigger `conferir_esporte` exige nota/parceiros e limpa o que não se
+      aplica; `trocar_escolhas` substitui `trocar_esporte`
+- [x] Diretoria > Modalidades > Inscritos: lista, confere se o parceiro também
+      se inscreveu e sorteia times equilibrados pela nota (serpentina, nada salvo)
 
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.

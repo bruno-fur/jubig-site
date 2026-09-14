@@ -28,7 +28,7 @@ const MENSAGEM: Record<string, string> = {
 
 const PADRAO: Record<TipoEvento, { temInscricao: boolean; temModalidades: boolean; prefixo: string }> = {
   jubigday: { temInscricao: true, temModalidades: true, prefixo: "JD" },
-  congresso: { temInscricao: true, temModalidades: false, prefixo: "CC" },
+  congresso: { temInscricao: true, temModalidades: true, prefixo: "CC" },
   tour: { temInscricao: false, temModalidades: false, prefixo: "JT" },
 };
 
@@ -248,7 +248,7 @@ export function FormularioEvento({
               </span>
               <span className="mt-1 text-xs text-apagado">
                 {t === "jubigday" && "Inscrição paga, com modalidades"}
-                {t === "congresso" && "Inscrição paga, sem modalidades"}
+                {t === "congresso" && "Inscrição paga, com oficinas"}
                 {t === "tour" && "Visita a uma igreja, entrada franca"}
               </span>
             </label>
@@ -452,13 +452,13 @@ export function FormularioEvento({
             <Interruptor
               ligado={f.temModalidades}
               aoMudar={(v) => mudar("temModalidades", v)}
-              rotulo="Tem modalidades esportivas"
-              dica="As modalidades em si são cadastradas em Diretoria > Modalidades."
+              rotulo="Tem modalidades (esportes ou oficinas)"
+              dica="Esportes no JubigDay, oficinas e estudos no Congresso. Cada uma é cadastrada em Diretoria > Modalidades."
             />
 
             {f.temModalidades && (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Campo rotulo="Modalidades por turno" dica="Quantas cada pessoa escolhe no mesmo turno.">
+                <Campo rotulo="Esportes por turno" dica="Quantos cada pessoa escolhe no mesmo turno. Oficina é sempre uma.">
                   <select
                     value={f.maxEsportesPorTurno}
                     onChange={(e) => mudar("maxEsportesPorTurno", e.target.value)}

@@ -102,6 +102,41 @@ alter table esportes drop constraint if exists esportes_turno_valido;
 alter table esportes add constraint esportes_turno_valido
   check (turno in ('manha', 'tarde', 'noite'));
 
+/*
+ * A mesma tabela serve a dois tipos de atividade:
+ *   esporte  — JubigDay: individual, dupla, trio ou time sorteado
+ *   oficina  — Congresso: estudo com alguém conduzindo, uma por turno
+ *
+ * Formato decide o que a pessoa informa ao escolher:
+ *   individual     nada
+ *   dupla / trio   o nome do(s) parceiro(s) — a própria pessoa monta o grupo
+ *   time_sorteado  nota de 1 a 5 da própria habilidade, para a diretoria
+ *                  sortear times equilibrados (futebol, vôlei)
+ *
+ * `formato` nasce do antigo `por_equipe` uma vez só, quando a coluna ainda não
+ * existe: equipe virava time sorteado, que é como a JUBIG monta os times.
+ */
+do $mig$ begin
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'esportes' and column_name = 'formato'
+  ) then
+    alter table esportes add column formato text not null default 'individual';
+    update esportes set formato = 'time_sorteado' where por_equipe;
+  end if;
+end $mig$;
+
+alter table esportes add column if not exists categoria text not null default 'esporte';
+alter table esportes add column if not exists descricao text;
+alter table esportes add column if not exists responsavel text;   -- quem conduz a oficina
+
+alter table esportes drop constraint if exists esportes_categoria_valida;
+alter table esportes add constraint esportes_categoria_valida
+  check (categoria in ('esporte', 'oficina'));
+alter table esportes drop constraint if exists esportes_formato_valido;
+alter table esportes add constraint esportes_formato_valido
+  check (formato in ('individual', 'dupla', 'trio', 'time_sorteado'));
+
 create table if not exists inscricoes (
   id uuid primary key default gen_random_uuid(),
   codigo text unique not null,         -- JD-0042
@@ -152,6 +187,10 @@ create table if not exists inscritos_esportes (
   esporte_id uuid references esportes on delete cascade,
   primary key (inscrito_id, esporte_id)
 );
+
+-- O que a pessoa informou ao escolher (ver "formato" em esportes).
+alter table inscritos_esportes add column if not exists nota smallint check (nota between 1 and 5);
+alter table inscritos_esportes add column if not exists parceiros text[];
 
 create table if not exists comprovantes (
   id uuid primary key default gen_random_uuid(),
@@ -325,10 +364,12 @@ language plpgsql security definer set search_path = public as $fn$
 declare
   v_vagas int; v_ocupadas int; v_turno text; v_evento uuid;
   v_limite int; v_no_turno int;
+  v_categoria text; v_formato text; v_nome text; v_parceiros text[]; v_precisa int;
 begin
   -- for update segura a linha até o commit: duas caravanas ao mesmo tempo
   -- não conseguem ocupar a mesma última vaga.
-  select vagas, turno, evento_id into v_vagas, v_turno, v_evento
+  select vagas, turno, evento_id, categoria, formato, nome
+    into v_vagas, v_turno, v_evento, v_categoria, v_formato, v_nome
     from esportes where id = new.esporte_id
     for update;
 
@@ -338,6 +379,40 @@ begin
 
   if (select evento_id from inscritos where id = new.inscrito_id) is distinct from v_evento then
     raise exception 'modalidade nao pertence ao evento da inscricao';
+  end if;
+
+  -- O que cada formato exige. O que não se aplica é limpo: oficina não guarda
+  -- nota, time sorteado não guarda parceiro.
+  if v_categoria = 'oficina' or v_formato = 'individual' then
+    new.nota := null;
+    new.parceiros := null;
+  elsif v_formato = 'time_sorteado' then
+    if new.nota is null then
+      raise exception 'nota_obrigatoria:%', v_nome;
+    end if;
+    new.parceiros := null;
+  else
+    v_precisa := case v_formato when 'dupla' then 1 else 2 end;
+    v_parceiros := array(
+      select trim(x) from unnest(coalesce(new.parceiros, '{}'::text[])) x where trim(x) <> ''
+    );
+    if coalesce(array_length(v_parceiros, 1), 0) < v_precisa then
+      raise exception 'parceiros_obrigatorios:%', v_nome;
+    end if;
+    new.parceiros := v_parceiros[1:v_precisa];
+    new.nota := null;
+  end if;
+
+  -- Oficina ocupa o turno: duas no mesmo turno é estar em dois lugares.
+  if v_categoria = 'oficina' and exists (
+    select 1 from inscritos_esportes ie
+      join esportes e on e.id = ie.esporte_id
+     where ie.inscrito_id = new.inscrito_id
+       and e.categoria = 'oficina'
+       and e.turno = v_turno
+       and e.id <> new.esporte_id
+  ) then
+    raise exception 'oficina_mesmo_turno';
   end if;
 
   select max_esportes_por_turno into v_limite from eventos where id = v_evento;
@@ -381,6 +456,7 @@ drop view if exists vagas_por_esporte;
 create view vagas_por_esporte
 with (security_invoker = false) as
   select e.id as esporte_id, e.evento_id, e.nome, e.turno, e.por_equipe, e.ordem,
+         e.categoria, e.formato, e.descricao, e.responsavel,
          e.vagas,
          count(ie.inscrito_id)::int as ocupadas,
          greatest(e.vagas - count(ie.inscrito_id), 0)::int as restantes
@@ -608,7 +684,7 @@ declare
   v_ocupadas int;
   v_quantos int;
   p jsonb;
-  v_esporte text;
+  v_item jsonb;
   v_igreja_id uuid;       -- soltas pelo mesmo motivo de criar_perfil
   v_igreja_nome text;
 begin
@@ -683,11 +759,18 @@ begin
     )
     returning id into v_inscrito;
 
-    for v_esporte in
-      select jsonb_array_elements_text(coalesce(p -> 'esportes', '[]'::jsonb))
+    -- Cada escolha é o id solto (formato antigo) ou {id, nota, parceiros}.
+    for v_item in
+      select * from jsonb_array_elements(coalesce(p -> 'esportes', '[]'::jsonb))
     loop
-      insert into inscritos_esportes (inscrito_id, esporte_id)
-      values (v_inscrito, v_esporte::uuid);
+      insert into inscritos_esportes (inscrito_id, esporte_id, nota, parceiros)
+      values (
+        v_inscrito,
+        (case when jsonb_typeof(v_item) = 'string' then v_item #>> '{}' else v_item ->> 'id' end)::uuid,
+        nullif(v_item ->> 'nota', '')::smallint,
+        case when jsonb_typeof(v_item -> 'parceiros') = 'array'
+             then array(select jsonb_array_elements_text(v_item -> 'parceiros')) end
+      );
     end loop;
   end loop;
 
@@ -1427,3 +1510,38 @@ drop trigger if exists perfil_protegido on perfis;
 create trigger perfil_protegido
   before update on perfis
   for each row execute function proteger_perfil();
+
+-- ============================================================
+-- Troca de modalidade com os detalhes da escolha (nota, parceiros).
+--
+-- Substitui trocar_esporte, que só recebia ids. Mesma transação única:
+-- se a escolha nova for recusada, a antiga continua lá.
+-- ============================================================
+create or replace function trocar_escolhas(
+  p_inscrito uuid,
+  p_escolhas jsonb,
+  p_de_boa boolean
+) returns void language plpgsql as $fn$
+declare v_item jsonb;
+begin
+  delete from inscritos_esportes where inscrito_id = p_inscrito;
+
+  for v_item in select * from jsonb_array_elements(coalesce(p_escolhas, '[]'::jsonb)) loop
+    insert into inscritos_esportes (inscrito_id, esporte_id, nota, parceiros)
+    values (
+      p_inscrito,
+      (v_item ->> 'id')::uuid,
+      nullif(v_item ->> 'nota', '')::smallint,
+      case when jsonb_typeof(v_item -> 'parceiros') = 'array'
+           then array(select jsonb_array_elements_text(v_item -> 'parceiros')) end
+    );
+  end loop;
+
+  update inscritos set de_boa = coalesce(p_de_boa, false) where id = p_inscrito;
+  if not found then
+    raise exception 'inscrito_nao_encontrado';
+  end if;
+end $fn$;
+
+revoke all on function trocar_escolhas(uuid, jsonb, boolean) from public, anon;
+grant execute on function trocar_escolhas(uuid, jsonb, boolean) to authenticated;

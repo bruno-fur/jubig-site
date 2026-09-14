@@ -20,7 +20,20 @@ const Pessoa = z.object({
   // Só o id: o nome gravado sai do cadastro de igrejas, no banco.
   igrejaId: z.uuid(),
   deBoa: z.boolean().default(false),
-  esportes: z.array(z.uuid()).default([]),
+  // Id solto (formato antigo) ou a escolha com nota/parceiros.
+  esportes: z
+    .array(
+      z.union([
+        z.uuid(),
+        z.object({
+          id: z.uuid(),
+          nota: z.number().int().min(1).max(5).nullish(),
+          parceiros: z.array(z.string().trim().max(80)).max(2).nullish(),
+        }),
+      ])
+    )
+    .max(12)
+    .default([]),
 });
 
 const Pedido = z.object({
@@ -141,6 +154,11 @@ function traduzirErro(msg: string) {
     return { erro: "idade_minima", inscrito: msg.split("idade_minima:")[1]?.trim() };
   if (msg.includes("igreja_invalida:"))
     return { erro: "igreja_invalida", inscrito: msg.split("igreja_invalida:")[1]?.trim() };
+  if (msg.includes("nota_obrigatoria:"))
+    return { erro: "nota_obrigatoria", modalidade: msg.split("nota_obrigatoria:")[1]?.trim() };
+  if (msg.includes("parceiros_obrigatorios:"))
+    return { erro: "parceiros_obrigatorios", modalidade: msg.split("parceiros_obrigatorios:")[1]?.trim() };
+  if (msg.includes("oficina_mesmo_turno")) return { erro: "oficina_mesmo_turno" };
   if (msg.includes("modalidade lotada")) return { erro: "modalidade_lotada" };
   if (msg.includes("limite_no_turno")) return { erro: "limite_no_turno", mensagem: msg };
   if (msg.includes("inscrito_unico_por_evento")) return { erro: "cpf_ja_inscrito" };
