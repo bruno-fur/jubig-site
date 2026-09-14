@@ -17,7 +17,8 @@ const Pessoa = z.object({
   cpf: z.string(),
   nascimento: z.string(),
   telefone: z.string().optional().default(""),
-  igreja: z.string().min(3).max(120),
+  // Só o id: o nome gravado sai do cadastro de igrejas, no banco.
+  igrejaId: z.uuid(),
   deBoa: z.boolean().default(false),
   esportes: z.array(z.uuid()).default([]),
 });
@@ -90,14 +91,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ erro: "escolha_conflitante", inscrito: p.nome }, { status: 400 });
   }
 
+  // Igreja fora da lista (ou desativada no meio do preenchimento): mensagem legível.
+  const { data: igrejas } = await supabase
+    .from("igrejas")
+    .select("id, nome, cidade")
+    .eq("ativa", true)
+    .in("id", [...new Set(inscritos.map((p) => p.igrejaId))]);
+  const nomeDaIgreja = new Map((igrejas ?? []).map((i) => [i.id, `${i.nome} (${i.cidade})`]));
+  const semIgreja = inscritos.find((p) => !nomeDaIgreja.has(p.igrejaId));
+  if (semIgreja)
+    return NextResponse.json({ erro: "igreja_invalida", inscrito: semIgreja.nome }, { status: 400 });
+
   /*
    * Uma chamada só: a função grava inscrição, inscritos e esportes na mesma
    * transação. Se a última modalidade lotar no meio, nada fica gravado.
+   *
+   * `igreja` vai junto com `igrejaId` só por compatibilidade: o banco atual
+   * usa o id e ignora o texto; um banco sem o schema novo ainda lê o texto.
    */
   const { data: codigo, error } = await supabase.rpc("criar_inscricao", {
     p_slug: slug,
     p_parcelas: parcelas,
-    p_inscritos: inscritos,
+    p_inscritos: inscritos.map((p) => ({ ...p, igreja: nomeDaIgreja.get(p.igrejaId) })),
   });
 
   if (error) return NextResponse.json(traduzirErro(error.message), { status: statusDoErro(error.message) });
@@ -124,6 +139,8 @@ export async function POST(req: Request) {
 function traduzirErro(msg: string) {
   if (msg.includes("idade_minima:"))
     return { erro: "idade_minima", inscrito: msg.split("idade_minima:")[1]?.trim() };
+  if (msg.includes("igreja_invalida:"))
+    return { erro: "igreja_invalida", inscrito: msg.split("igreja_invalida:")[1]?.trim() };
   if (msg.includes("modalidade lotada")) return { erro: "modalidade_lotada" };
   if (msg.includes("limite_no_turno")) return { erro: "limite_no_turno", mensagem: msg };
   if (msg.includes("inscrito_unico_por_evento")) return { erro: "cpf_ja_inscrito" };

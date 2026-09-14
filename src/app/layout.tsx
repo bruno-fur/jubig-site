@@ -24,13 +24,13 @@ const texto = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: { default: "JUBIG — Juventude Batista do Iguaçu", template: "%s · JUBIG" },
+  title: { default: "Jubig", template: "%s · Jubig" },
   description:
     "Encontros, esportes e inscrições da juventude das igrejas batistas do oeste do Paraná.",
   openGraph: {
     type: "website",
     locale: "pt_BR",
-    siteName: "JUBIG",
+    siteName: "Jubig",
   },
 };
 

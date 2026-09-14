@@ -228,13 +228,28 @@ end $fn$;
 -- Perfil criado junto com a conta.
 create or replace function criar_perfil() returns trigger
 language plpgsql security definer set search_path = public as $fn$
+declare
+  v_meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  -- Variáveis soltas, não igrejas%rowtype: a tabela só é criada mais abaixo
+  -- neste arquivo, e %rowtype é resolvido na hora de criar a função.
+  v_igreja_id uuid;
+  v_igreja_nome text;
 begin
-  insert into perfis (id, nome, telefone, igreja)
+  -- Igreja vem da lista (ver "Igreja escolhida da lista"). Id que não existe
+  -- vira nulo: derrubar o cadastro por isso deixaria a pessoa sem conta e sem
+  -- saber por quê — ela escolhe de novo na inscrição.
+  if (v_meta ->> 'igrejaId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    select id, nome || ' (' || cidade || ')' into v_igreja_id, v_igreja_nome
+      from igrejas where id = (v_meta ->> 'igrejaId')::uuid and ativa;
+  end if;
+
+  insert into perfis (id, nome, telefone, igreja, igreja_id)
   values (
     new.id,
-    coalesce(new.raw_user_meta_data ->> 'nome', ''),
-    new.raw_user_meta_data ->> 'telefone',
-    new.raw_user_meta_data ->> 'igreja'
+    coalesce(v_meta ->> 'nome', ''),
+    v_meta ->> 'telefone',
+    v_igreja_nome,
+    v_igreja_id
   )
   on conflict (id) do nothing;
   return new;
@@ -594,6 +609,8 @@ declare
   v_quantos int;
   p jsonb;
   v_esporte text;
+  v_igreja_id uuid;       -- soltas pelo mesmo motivo de criar_perfil
+  v_igreja_nome text;
 begin
   select * into v_evento from eventos where slug = p_slug and publicado;
   if v_evento.id is null then
@@ -629,14 +646,27 @@ begin
       raise exception 'idade_minima:%', p ->> 'nome';
     end if;
 
-    insert into inscritos (inscricao_id, nome, cpf, nascimento, telefone, igreja, de_boa)
+    -- Só igreja da lista. O nome gravado sai do cadastro, nunca do que o
+    -- navegador mandou: é isso que junta "PIB Toledo" e "Primeira Igreja
+    -- Batista de Toledo" numa linha só no painel.
+    v_igreja_id := null;
+    if (p ->> 'igrejaId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      select id, nome || ' (' || cidade || ')' into v_igreja_id, v_igreja_nome
+        from igrejas where id = (p ->> 'igrejaId')::uuid and ativa;
+    end if;
+    if v_igreja_id is null then
+      raise exception 'igreja_invalida:%', p ->> 'nome';
+    end if;
+
+    insert into inscritos (inscricao_id, nome, cpf, nascimento, telefone, igreja, igreja_id, de_boa)
     values (
       v_inscricao,
       p ->> 'nome',
       regexp_replace(p ->> 'cpf', '\D', '', 'g'),
       (p ->> 'nascimento')::date,
       nullif(p ->> 'telefone', ''),
-      p ->> 'igreja',
+      v_igreja_nome,
+      v_igreja_id,
       coalesce((p ->> 'deBoa')::boolean, false)
     )
     returning id into v_inscrito;
@@ -1253,3 +1283,16 @@ end $fn$;
 
 revoke all on function cancelar_inscricao(text, text) from public, anon;
 grant execute on function cancelar_inscricao(text, text) to authenticated;
+
+-- ============================================================
+-- Igreja escolhida da lista
+--
+-- Com texto livre, a mesma igreja chegava como "PIB Toledo" e "Primeira Igreja
+-- Batista de Toledo", e o painel por igreja contava duas. Agora perfil e
+-- inscrito apontam para `igrejas`; a coluna `igreja` continua com o nome
+-- pronto, "Nome (Cidade)", para CSV, ingresso e portaria, que já leem texto.
+--
+-- Quem se cadastrou antes fica com igreja_id nulo e o texto que digitou.
+-- ============================================================
+alter table perfis add column if not exists igreja_id uuid references igrejas on delete set null;
+alter table inscritos add column if not exists igreja_id uuid references igrejas on delete set null;

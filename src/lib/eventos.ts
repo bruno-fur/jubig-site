@@ -3,6 +3,7 @@ import {
   ORDEM_TURNO,
   type Evento,
   type Igreja,
+  type OpcaoIgreja,
   type ItemAgenda,
   type Turno,
   type VagaEsporte,
@@ -127,6 +128,23 @@ export async function agendaCompleta(): Promise<ItemAgenda[]> {
 /** Só o que ainda vai acontecer, em ordem. */
 export function daquiPraFrente(itens: ItemAgenda[], hoje = hojeISO()): ItemAgenda[] {
   return itens.filter((e) => (e.data_fim ?? e.data_evento) >= hoje);
+}
+
+/**
+ * Igrejas para escolher no cadastro e na inscrição.
+ *
+ * Filtra `ativa` aqui mesmo: a RLS devolve as desativadas para a diretoria,
+ * e o banco recusaria a inscrição de quem escolhesse uma delas.
+ */
+export async function igrejasParaEscolha(): Promise<OpcaoIgreja[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("igrejas")
+    .select("id, nome, cidade")
+    .eq("ativa", true)
+    .order("cidade")
+    .order("nome");
+  return (data ?? []) as OpcaoIgreja[];
 }
 
 export async function igrejasAtivas(): Promise<Igreja[]> {

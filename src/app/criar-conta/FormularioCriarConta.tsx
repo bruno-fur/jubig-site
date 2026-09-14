@@ -11,20 +11,22 @@ import { CampoTelefone } from "@/components/CampoTelefone";
 import { ProvedorJuca } from "@/components/juca/contexto";
 import { JucaCanto } from "@/components/juca/Ancora";
 import { nomeCompleto } from "@/lib/validacao";
+import { CampoIgreja } from "@/components/CampoIgreja";
+import type { OpcaoIgreja } from "@/tipos/db";
 
-export function FormularioCriarConta() {
+export function FormularioCriarConta({ igrejas }: { igrejas: OpcaoIgreja[] }) {
   return (
     <ProvedorJuca>
-      <Miolo />
+      <Miolo igrejas={igrejas} />
     </ProvedorJuca>
   );
 }
 
-function Miolo() {
+function Miolo({ igrejas }: { igrejas: OpcaoIgreja[] }) {
   const router = useRouter();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
-  const [igreja, setIgreja] = useState("");
+  const [igrejaId, setIgrejaId] = useState("");
   const [telefone, setTelefone] = useState("");
   const [pais, setPais] = useState<CountryCode>("BR");
   const [e164, setE164] = useState<string | null>(null);
@@ -40,7 +42,7 @@ function Miolo() {
     const e: Record<string, string> = {};
     if (!nomeCompleto(nome)) e.nome = "Precisa do nome e do sobrenome.";
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) e.email = "Esse e-mail não parece certo.";
-    if (igreja.trim().length < 3) e.igreja = "De qual igreja você é?";
+    if (!igrejaId) e.igreja = "Escolha a sua igreja na lista.";
     if (telefone && !e164) e.telefone = "Número incompleto para o país escolhido.";
     if (senha.length < 8) e.senha = "Use pelo menos 8 caracteres.";
     setErros(e);
@@ -53,13 +55,17 @@ function Miolo() {
     if (!conferir()) return;
 
     setEnviando(true);
+    const escolhida = igrejas.find((i) => i.id === igrejaId);
+    const rotuloIgreja = escolhida ? `${escolhida.nome} (${escolhida.cidade})` : null;
     const supabase = criarClienteNavegador();
     const { error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password: senha,
       options: {
         // Vai para o perfil pelo trigger `ao_criar_usuario` do schema.
-        data: { nome: nome.trim(), telefone: e164 ?? null, igreja: igreja.trim() },
+        // O trigger usa o id e busca o nome no cadastro; `igreja` em texto é
+        // só para banco que ainda não recebeu o schema novo.
+        data: { nome: nome.trim(), telefone: e164 ?? null, igrejaId, igreja: rotuloIgreja },
       },
     });
 
@@ -147,14 +153,12 @@ function Miolo() {
           estado="digitando"
           fala="Capriche: o link vai pra cá."
         />
-        <Campo
+        <CampoIgreja
           rotulo="Sua igreja"
-          valor={igreja}
-          aoMudar={setIgreja}
+          igrejas={igrejas}
+          valor={igrejaId}
+          aoMudar={setIgrejaId}
           erro={erros.igreja}
-          obrigatorio
-          placeholder="Primeira Igreja Batista de..."
-          estado={igreja.trim().length >= 3 ? "valido" : "digitando"}
           fala="Serve para montar a caravana."
         />
         <CampoTelefone

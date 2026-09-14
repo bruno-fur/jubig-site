@@ -9,6 +9,7 @@ import {
   agruparPorTurno,
   inscricoesAbertas,
   vagasRestantes,
+  igrejasParaEscolha,
 } from "@/lib/eventos";
 import { formatarData, formatarReais } from "@/lib/validacao";
 import { FormularioInscricao } from "./FormularioInscricao";
@@ -58,17 +59,16 @@ export default async function PaginaInscricao({
     );
   }
 
-  const [esportes, restantes] = await Promise.all([
+  const supabase = await createClient();
+  const [esportes, restantes, igrejas, { data: perfil }] = await Promise.all([
     esportesDoEvento(evento.id),
     vagasRestantes(evento),
+    igrejasParaEscolha(),
+    supabase.from("perfis").select("nome, telefone, igreja_id").eq("id", sessao.userId).maybeSingle(),
   ]);
 
-  const supabase = await createClient();
-  const { data: perfil } = await supabase
-    .from("perfis")
-    .select("nome, telefone, igreja")
-    .eq("id", sessao.userId)
-    .maybeSingle();
+  // A igreja do cadastro vem marcada — se ainda estiver na lista.
+  const igrejaDoPerfil = igrejas.some((i) => i.id === perfil?.igreja_id) ? perfil!.igreja_id! : "";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
@@ -94,9 +94,10 @@ export default async function PaginaInscricao({
         }}
         grupos={agruparPorTurno(esportes)}
         vagasRestantes={restantes}
+        igrejas={igrejas}
         perfil={{
           nome: perfil?.nome ?? sessao.nome ?? "",
-          igreja: perfil?.igreja ?? "",
+          igrejaId: igrejaDoPerfil,
           telefone: perfil?.telefone ?? "",
         }}
       />

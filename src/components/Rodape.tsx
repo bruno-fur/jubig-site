@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
-const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubig.oficial";
+import { INSTAGRAM } from "@/lib/site";
 
 export function Rodape() {
   return (
@@ -17,7 +17,7 @@ export function Rodape() {
             className="h-10 w-auto"
           />
           <p className="mt-3 text-sm text-creme/70">
-            Juventude Batista do Iguaçu — jovens das igrejas batistas do oeste do Paraná.
+            Juventude Batista do Iguaçu
           </p>
         </div>
 

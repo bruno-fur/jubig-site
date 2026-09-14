@@ -14,7 +14,7 @@ import { Calendario } from "@/components/Calendario";
 import { MapaIgrejas } from "@/components/MapaIgrejas";
 import { ROTULO_TIPO, type Igreja, type ItemAgenda } from "@/tipos/db";
 
-const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubigoficial";
+import { INSTAGRAM } from "@/lib/site";
 const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export default async function Home() {

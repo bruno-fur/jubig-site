@@ -1,4 +1,4 @@
-import { LinkNav } from "@/components/LinkNav";
+import { AbasDiretoria, type AbaDiretoria } from "@/components/AbasDiretoria";
 import { exigirDiretoria } from "@/lib/sessao";
 import { ROTULO_PAPEL } from "@/tipos/db";
 
@@ -17,10 +17,10 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
   const sessao = await exigirDiretoria();
   const admin = sessao.papel === "admin";
 
-  const abas = [
+  const abas: (AbaDiretoria & { soAdmin: boolean })[] = [
     { href: "/diretoria", titulo: "Visão geral", soAdmin: false },
     { href: "/diretoria/inscricoes", titulo: "Inscrições", soAdmin: false },
-    { href: "/diretoria/portaria", titulo: "Portaria", soAdmin: false },
+    { href: "/diretoria/portaria", titulo: "Portaria", soAdmin: false, tambem: ["/diretoria/ingresso"] },
     { href: "/diretoria/avisos", titulo: "Avisos", soAdmin: true },
     { href: "/diretoria/modalidades", titulo: "Modalidades", soAdmin: true },
     { href: "/diretoria/igrejas", titulo: "Igrejas", soAdmin: true },
@@ -37,13 +37,7 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
         </p>
       </div>
 
-      <nav className="mt-5 flex gap-1 overflow-x-auto border-b border-linha">
-        {abas.map((a) => (
-          <LinkNav key={a.href} href={a.href} className="shrink-0 border-b-2 border-transparent px-4 py-3 text-sm font-semibold text-apagado transition hover:border-laranja/40 hover:text-tinta">
-            {a.titulo}
-          </LinkNav>
-        ))}
-      </nav>
+      <AbasDiretoria abas={abas} />
 
       <div className="pt-6">{children}</div>
     </div>

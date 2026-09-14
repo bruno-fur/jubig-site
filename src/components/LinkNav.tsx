@@ -24,13 +24,20 @@ export function LinkNav({
   href,
   children,
   className = "",
+  atual = false,
 }: {
   href: string;
   children: React.ReactNode;
   className?: string;
+  /** Página aberta agora: vira `aria-current`, que o leitor de tela anuncia. */
+  atual?: boolean;
 }) {
   return (
-    <Link href={href} className={`inline-flex items-center gap-1.5 ${className}`}>
+    <Link
+      href={href}
+      aria-current={atual ? "page" : undefined}
+      className={`inline-flex items-center gap-1.5 ${className}`}
+    >
       {children}
       <Rodinha />
     </Link>

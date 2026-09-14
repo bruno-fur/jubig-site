@@ -33,6 +33,10 @@ insert into diretoria (user_id, papel) values
 
 update eventos set publicado = true where slug = 'jubigday-2026';
 
+-- Igreja fixa para os testes: a inscrição só aceita igreja da lista.
+insert into igrejas (id, nome, cidade) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'PIB Assis', 'Assis Chateaubriand');
+
 create or replace function espera_erro(p_sql text, p_trecho text, p_nome text)
 returns void language plpgsql as $$
 begin
@@ -55,7 +59,7 @@ set role authenticated;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 
 select espera_erro($x$
-  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Sem Confirmacao","cpf":"52998224725","nascimento":"2000-01-01","igreja":"IB Teste","deBoa":true,"esportes":[]}]'::jsonb)
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Sem Confirmacao","cpf":"52998224725","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
 $x$, 'row-level security', 'camada 4 — e-mail nao confirmado recusado pela RLS');
 
 -- ============================================================
@@ -71,10 +75,10 @@ begin
 
   v_codigo := criar_inscricao('jubigday-2026', 1, jsonb_build_array(
     jsonb_build_object('nome','Bruno Furtado','cpf','529.982.247-25','nascimento','2000-03-10',
-                       'igreja','PIB Assis','telefone','+5545999990000','deBoa',false,
+                       'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','telefone','+5545999990000','deBoa',false,
                        'esportes', jsonb_build_array(v_futsal)),
     jsonb_build_object('nome','Maria Souza','cpf','16899535009','nascimento','2005-07-22',
-                       'igreja','PIB Assis','deBoa',false,
+                       'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false,
                        'esportes', jsonb_build_array(v_volei))
   ));
 
@@ -99,14 +103,14 @@ end $$;
 -- CPF repetido no mesmo evento
 -- ============================================================
 select espera_erro($x$
-  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Bruno Outra Vez","cpf":"52998224725","nascimento":"2000-03-10","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb)
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Bruno Outra Vez","cpf":"52998224725","nascimento":"2000-03-10","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
 $x$, 'inscrito_unico_por_evento', 'CPF nao entra duas vezes no mesmo evento');
 
 -- ============================================================
 -- Idade mínima conta na data do evento (17/10/2026)
 -- ============================================================
 select espera_erro($x$
-  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Novo Demais","cpf":"01234567890","nascimento":"2014-10-18","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb)
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Novo Demais","cpf":"01234567890","nascimento":"2014-10-18","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
 $x$, 'idade_minima', 'faz 12 um dia depois do evento — recusado');
 
 -- Um dia antes passa.
@@ -114,7 +118,7 @@ do $$
 declare v_codigo text;
 begin
   v_codigo := criar_inscricao('jubigday-2026', 1,
-    '[{"nome":"No Limite","cpf":"01234567890","nascimento":"2014-10-17","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb);
+    '[{"nome":"No Limite","cpf":"01234567890","nascimento":"2014-10-17","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb);
   raise notice 'ok    faz 12 no dia do evento — aceito (%)', v_codigo;
 end $$;
 
@@ -122,7 +126,7 @@ end $$;
 -- Parcelas acima do que o evento permite (JubigDay: max_parcelas = 1)
 -- ============================================================
 select espera_erro($x$
-  select criar_inscricao('jubigday-2026', 2, '[{"nome":"Quer Parcelar","cpf":"11144477735","nascimento":"2000-01-01","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb)
+  select criar_inscricao('jubigday-2026', 2, '[{"nome":"Quer Parcelar","cpf":"11144477735","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
 $x$, 'parcelas fora do permitido', 'parcelas acima de max_parcelas recusado');
 
 -- ============================================================
@@ -136,7 +140,7 @@ begin
 
   v_codigo := criar_inscricao('jubigday-2026', 1, jsonb_build_array(jsonb_build_object(
     'nome','Dois No Mesmo Turno','cpf','00000010073','nascimento','2000-01-01',
-    'igreja','PIB Assis','deBoa',false,
+    'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false,
     'esportes', jsonb_build_array(v_a, v_b))));
   raise notice 'ok    duas modalidades no mesmo turno sao aceitas (%)', v_codigo;
 end $$;
@@ -156,7 +160,7 @@ begin
     format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
       jsonb_build_array(jsonb_build_object(
         'nome','Passou Do Limite','cpf','00000013765','nascimento','2000-01-01',
-        'igreja','PIB Assis','deBoa',false,
+        'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false,
         'esportes', jsonb_build_array(v_a, v_b)))::text),
     'limite_no_turno', 'limite de 1 por turno recusa a segunda');
 end $$;
@@ -181,14 +185,14 @@ begin
 
   perform criar_inscricao('jubigday-2026', 1, jsonb_build_array(jsonb_build_object(
     'nome','Primeiro Xadrez','cpf','11144477735','nascimento','2000-01-01',
-    'igreja','PIB Assis','deBoa',false, 'esportes', jsonb_build_array(v_xadrez))));
+    'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false, 'esportes', jsonb_build_array(v_xadrez))));
   raise notice 'ok    ultima vaga do xadrez ocupada';
 
   perform espera_erro(
     format($x$ select criar_inscricao('jubigday-2026', 1, %L::jsonb) $x$,
       jsonb_build_array(jsonb_build_object(
         'nome','Segundo Xadrez','cpf','15350946056','nascimento','2000-01-01',
-        'igreja','PIB Assis','deBoa',false,
+        'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false,
         'esportes', jsonb_build_array(v_xadrez)))::text),
     'modalidade lotada', 'modalidade lotada recusa o proximo');
 end $$;
@@ -370,7 +374,7 @@ set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 do $$
 begin
   perform criar_inscricao('jubigday-2026', 1,
-    '[{"nome":"Depois De Confirmar","cpf":"15350946056","nascimento":"2000-01-01","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb);
+    '[{"nome":"Depois De Confirmar","cpf":"15350946056","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb);
   raise notice 'ok    confirmado passa a conseguir se inscrever';
 end $$;
 
@@ -544,7 +548,7 @@ do $$
 declare v_codigo text;
 begin
   v_codigo := criar_inscricao('congresso-carnaval-2027', 2,
-    '[{"nome":"Vai No Congresso","cpf":"00000017400","nascimento":"2000-01-01","igreja":"PIB Assis","deBoa":true,"esportes":[]}]'::jsonb);
+    '[{"nome":"Vai No Congresso","cpf":"00000017400","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb);
   if v_codigo !~ '^CC-' then
     raise exception 'FALHOU — codigo do congresso deveria comecar com CC, veio %', v_codigo;
   end if;
@@ -832,7 +836,7 @@ begin
   select id into v_xadrez from esportes where nome = 'Xadrez';
   v_codigo := criar_inscricao('jubigday-2026', 1, jsonb_build_array(jsonb_build_object(
     'nome','Primeiro Xadrez De Novo','cpf','11144477735','nascimento','2000-01-01',
-    'igreja','PIB Assis','deBoa',false,'esportes', jsonb_build_array(v_xadrez))));
+    'igrejaId','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','deBoa',false,'esportes', jsonb_build_array(v_xadrez))));
   raise notice 'ok    mesmo CPF se inscreve de novo depois de cancelar, na mesma vaga (%)', v_codigo;
 end $$;
 
@@ -853,6 +857,56 @@ begin
     raise exception 'FALHOU — motivo do cancelamento nao ficou gravado';
   end if;
   raise notice 'ok    motivo e autor do cancelamento ficam gravados';
+end $$;
+
+-- ============================================================
+-- Igreja só da lista
+-- ============================================================
+set role postgres;
+insert into igrejas (id, nome, cidade, ativa) values
+  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'IB Fechada', 'Cascavel', false);
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+select espera_erro($x$
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Igreja Inventada","cpf":"39053344705","nascimento":"2000-01-01","igrejaId":"cccccccc-cccc-4ccc-8ccc-cccccccccccc","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'igreja_invalida', 'igreja fora da lista recusada');
+
+select espera_erro($x$
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Igreja Digitada","cpf":"39053344705","nascimento":"2000-01-01","igreja":"PIB Toledo","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'igreja_invalida', 'igreja digitada em texto recusada');
+
+select espera_erro($x$
+  select criar_inscricao('jubigday-2026', 1, '[{"nome":"Igreja Fechada","cpf":"39053344705","nascimento":"2000-01-01","igrejaId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'igreja_invalida', 'igreja desativada recusada');
+
+do $$
+begin
+  if (select igreja from inscritos where nome = 'Bruno Furtado') is distinct from 'PIB Assis (Assis Chateaubriand)'
+     or (select igreja_id from inscritos where nome = 'Bruno Furtado') is distinct from 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' then
+    raise exception 'FALHOU — nome da igreja deveria vir do cadastro: %',
+      (select igreja from inscritos where nome = 'Bruno Furtado');
+  end if;
+  raise notice 'ok    nome da igreja gravado a partir do cadastro';
+end $$;
+
+set role postgres;
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
+  ('55555555-5555-5555-5555-555555555555', 'comigreja@teste.com', now(), '{"nome":"Com Igreja","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}'),
+  ('66666666-6666-6666-6666-666666666666', 'igrejalixo@teste.com', now(), '{"nome":"Igreja Lixo","igrejaId":"nao-e-uuid"}');
+
+do $$
+begin
+  if (select igreja_id from perfis where id = '55555555-5555-5555-5555-555555555555') is distinct from 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' then
+    raise exception 'FALHOU — perfil deveria guardar a igreja escolhida no cadastro';
+  end if;
+  raise notice 'ok    cadastro guarda a igreja escolhida';
+
+  if not exists (select 1 from perfis where id = '66666666-6666-6666-6666-666666666666' and igreja_id is null) then
+    raise exception 'FALHOU — igreja invalida no cadastro deveria virar nulo sem derrubar a conta';
+  end if;
+  raise notice 'ok    igreja invalida no cadastro nao derruba a conta';
 end $$;
 
 select 'TODOS OS TESTES PASSARAM' as resultado;

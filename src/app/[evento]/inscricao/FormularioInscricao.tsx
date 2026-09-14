@@ -11,9 +11,10 @@ import type { EstadoJuca } from "@/components/juca/Juca";
 import { Etapas } from "@/components/Etapas";
 import { Girando } from "@/components/Girando";
 import { EscolhaEsportes } from "@/components/EscolhaEsportes";
+import { CampoIgreja } from "@/components/CampoIgreja";
 import { dataParaISO } from "@/lib/mascaras";
 import { formatarReais, idadeNaData, nomeCompleto, validarCPF, dataValida } from "@/lib/validacao";
-import { ROTULO_TURNO, type Turno, type VagaEsporte } from "@/tipos/db";
+import { ROTULO_TURNO, type OpcaoIgreja, type Turno, type VagaEsporte } from "@/tipos/db";
 
 type EventoResumo = {
   slug: string;
@@ -32,7 +33,7 @@ type Pessoa = {
   nome: string;
   cpf: string;
   nascimento: string;
-  igreja: string;
+  igrejaId: string;
   telefone: string;
   pais: CountryCode;
   e164: string | null;
@@ -61,13 +62,13 @@ const TITULO: Record<Etapa, string> = {
 const etapasDo = (temModalidades: boolean): Etapa[] =>
   temModalidades ? ["pessoas", "esportes", "conferir"] : ["pessoas", "conferir"];
 
-function pessoaVazia(igreja = ""): Pessoa {
+function pessoaVazia(igrejaId = ""): Pessoa {
   return {
     chave: crypto.randomUUID(),
     nome: "",
     cpf: "",
     nascimento: "",
-    igreja,
+    igrejaId,
     telefone: "",
     pais: "BR",
     e164: null,
@@ -80,7 +81,8 @@ export function FormularioInscricao(props: {
   evento: EventoResumo;
   grupos: [Turno, VagaEsporte[]][];
   vagasRestantes: number | null;
-  perfil: { nome: string; igreja: string; telefone: string };
+  igrejas: OpcaoIgreja[];
+  perfil: { nome: string; igrejaId: string; telefone: string };
 }) {
   return (
     <ProvedorJuca>
@@ -93,12 +95,14 @@ function Miolo({
   evento,
   grupos,
   vagasRestantes,
+  igrejas,
   perfil,
 }: {
   evento: EventoResumo;
   grupos: [Turno, VagaEsporte[]][];
   vagasRestantes: number | null;
-  perfil: { nome: string; igreja: string; telefone: string };
+  igrejas: OpcaoIgreja[];
+  perfil: { nome: string; igrejaId: string; telefone: string };
 }) {
   const router = useRouter();
 
@@ -107,7 +111,7 @@ function Miolo({
   const topo = useRef<HTMLDivElement>(null);
   const posicao = etapas.indexOf(etapa);
   const [pessoas, setPessoas] = useState<Pessoa[]>(() => [
-    { ...pessoaVazia(perfil.igreja), nome: perfil.nome },
+    { ...pessoaVazia(perfil.igrejaId), nome: perfil.nome },
   ]);
   const [parcelas, setParcelas] = useState(1);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -123,7 +127,7 @@ function Miolo({
   }
 
   function adicionar() {
-    setPessoas((lista) => [...lista, pessoaVazia(lista[0]?.igreja ?? "")]);
+    setPessoas((lista) => [...lista, pessoaVazia(lista[0]?.igrejaId ?? "")]);
   }
 
   function remover(i: number) {
@@ -151,7 +155,7 @@ function Miolo({
       else if (idadeNaData(iso, evento.dataEvento) < evento.idadeMinima)
         e[`${i}.nascimento`] = `Precisa ter ${evento.idadeMinima} anos na data do evento.`;
 
-      if (p.igreja.trim().length < 3) e[`${i}.igreja`] = "De qual igreja?";
+      if (!p.igrejaId) e[`${i}.igreja`] = "Escolha a igreja na lista.";
       if (p.telefone && !p.e164) e[`${i}.telefone`] = "Número incompleto para o país escolhido.";
     });
 
@@ -207,7 +211,7 @@ function Miolo({
           cpf: p.cpf.replace(/\D/g, ""),
           nascimento: dataParaISO(p.nascimento),
           telefone: p.e164 ?? "",
-          igreja: p.igreja.trim(),
+          igrejaId: p.igrejaId,
           deBoa: p.deBoa,
           esportes: p.deBoa ? [] : p.esportes,
         })),
@@ -221,7 +225,7 @@ function Miolo({
       setErroGeral(mensagemDeErro(corpo));
       // Erro de gente ou de CPF é na etapa 1; de modalidade, na 2.
       if (
-        ["nome_incompleto", "cpf_invalido", "cpf_repetido", "idade_minima", "cpf_ja_inscrito", "nascimento_invalido"].includes(
+        ["nome_incompleto", "igreja_invalida", "cpf_invalido", "cpf_repetido", "idade_minima", "cpf_ja_inscrito", "nascimento_invalido"].includes(
           corpo.erro
         )
       )
@@ -272,6 +276,7 @@ function Miolo({
               key={p.chave}
               indice={i}
               pessoa={p}
+              igrejas={igrejas}
               erros={erros}
               podeRemover={pessoas.length > 1}
               aoMexer={(m) => mexer(i, m)}
@@ -316,6 +321,7 @@ function Miolo({
         <Conferencia
           evento={evento}
           pessoas={pessoas}
+          igrejas={igrejas}
           grupos={grupos}
           parcelas={parcelas}
           aoTrocarParcelas={setParcelas}
@@ -361,6 +367,7 @@ function Miolo({
 function FichaPessoa({
   indice,
   pessoa,
+  igrejas,
   erros,
   podeRemover,
   aoMexer,
@@ -368,6 +375,7 @@ function FichaPessoa({
 }: {
   indice: number;
   pessoa: Pessoa;
+  igrejas: OpcaoIgreja[];
   erros: Record<string, string>;
   podeRemover: boolean;
   aoMexer: (m: Partial<Pessoa>) => void;
@@ -436,14 +444,12 @@ function FichaPessoa({
           fala="A idade conta na data do evento."
         />
 
-        <Campo
-          rotulo="Igreja"
-          valor={pessoa.igreja}
-          aoMudar={(igreja) => aoMexer({ igreja })}
+        <CampoIgreja
+          igrejas={igrejas}
+          valor={pessoa.igrejaId}
+          aoMudar={(igrejaId) => aoMexer({ igrejaId })}
           erro={erros[`${indice}.igreja`]}
-          obrigatorio
-          estado={pessoa.igreja.trim().length >= 3 ? "valido" : "digitando"}
-          fala="Qual igreja representa?"
+          fala={pessoa.igrejaId ? "Anotado!" : "Qual igreja representa?"}
         />
 
         <CampoTelefone
@@ -460,6 +466,7 @@ function FichaPessoa({
 function Conferencia({
   evento,
   pessoas,
+  igrejas,
   grupos,
   parcelas,
   aoTrocarParcelas,
@@ -467,6 +474,7 @@ function Conferencia({
 }: {
   evento: EventoResumo;
   pessoas: Pessoa[];
+  igrejas: OpcaoIgreja[];
   grupos: [Turno, VagaEsporte[]][];
   parcelas: number;
   aoTrocarParcelas: (n: number) => void;
@@ -487,7 +495,7 @@ function Conferencia({
           <div key={p.chave} className="p-5">
             <p className="titulo text-lg">{p.nome.trim() || `Pessoa ${i + 1}`}</p>
             <p className="mt-1 text-sm text-apagado">
-              {p.cpf} · {p.nascimento} · {p.igreja}
+              {p.cpf} · {p.nascimento} · {nomeDaIgreja(igrejas, p.igrejaId)}
             </p>
             <p className="mt-2 text-sm">
               {p.deBoa ? (
@@ -545,6 +553,8 @@ function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: numb
   switch (corpo.erro) {
     case "email_nao_confirmado":
       return "Confirme seu e-mail antes de se inscrever.";
+    case "igreja_invalida":
+      return `Escolha uma igreja da lista${quem}.`;
     case "nome_incompleto":
       return `Falta o sobrenome${quem}.`;
     case "cpf_invalido":
@@ -572,4 +582,9 @@ function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: numb
     default:
       return "Não deu para registrar agora. Tente de novo em instantes.";
   }
+}
+
+function nomeDaIgreja(igrejas: OpcaoIgreja[], id: string) {
+  const i = igrejas.find((x) => x.id === id);
+  return i ? `${i.nome} (${i.cidade})` : "";
 }

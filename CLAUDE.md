@@ -188,6 +188,12 @@ garante que sempre sobre ao menos um admin.
 - [x] Área do admin (Diretoria > Usuários): pendências do sistema, reenviar
       confirmação, confirmar e-mail à mão
 
+- [x] Igreja **só da lista** no cadastro e na inscrição (`igreja_id`). O nome
+      gravado sai de `igrejas` no banco, nunca do texto do navegador — texto
+      livre dividia "PIB Toledo" e "Primeira Igreja Batista de Toledo" em duas
+      no painel. Igreja que falta: a diretoria cadastra em Diretoria > Igrejas
+- [x] Aba atual da diretoria marcada (`aria-current`)
+
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 

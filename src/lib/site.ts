@@ -22,3 +22,6 @@ export function urlDoSite(): string {
 
   return "http://localhost:3000";
 }
+
+/** Perfil do Instagram, sem o @. Um lugar só: já esteve escrito de dois jeitos. */
+export const INSTAGRAM = process.env.NEXT_PUBLIC_INSTAGRAM ?? "jubigoficial";

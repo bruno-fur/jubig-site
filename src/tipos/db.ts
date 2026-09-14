@@ -187,6 +187,9 @@ export const RESUMO_TIPO: Record<TipoEvento, string> = {
   tour: "Visita a uma igreja da união",
 };
 
+/** O que o seletor de igreja do cadastro e da inscrição precisa. */
+export type OpcaoIgreja = { id: string; nome: string; cidade: string };
+
 export type Igreja = {
   id: string;
   nome: string;
