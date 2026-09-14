@@ -17,37 +17,42 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
   const sessao = await exigirDiretoria();
   const admin = sessao.papel === "admin";
 
-  const abas: (AbaDiretoria & { soAdmin: boolean })[] = [
-    { href: "/diretoria", titulo: "Visão geral", soAdmin: false },
-    { href: "/diretoria/inscricoes", titulo: "Inscrições", soAdmin: false },
-    { href: "/diretoria/pagamentos", titulo: "Pagamentos", soAdmin: false },
-    {
-      href: "/diretoria/validacao",
-      titulo: "Validação",
-      soAdmin: false,
-      tambem: ["/diretoria/ingresso", "/diretoria/portaria"],
-    },
-    { href: "/diretoria/eventos", titulo: "Eventos", soAdmin: true },
-    { href: "/diretoria/avisos", titulo: "Avisos", soAdmin: true },
-    { href: "/diretoria/modalidades", titulo: "Modalidades", soAdmin: true },
-    { href: "/diretoria/igrejas", titulo: "Igrejas", soAdmin: true },
-    { href: "/diretoria/site", titulo: "Site", soAdmin: true },
-    { href: "/diretoria/usuarios", titulo: "Usuários", soAdmin: true },
-    { href: "/diretoria/equipe", titulo: "Equipe", soAdmin: true },
-  ].filter((a) => admin || !a.soAdmin);
+  // Membro vê só o dia a dia; a administração é do admin. A recusa de verdade
+  // continua em exigirAdmin() e na RLS — esconder o link não é controle de acesso.
+  const abas: AbaDiretoria[] = (
+    [
+      { href: "/diretoria", titulo: "Visão geral", grupo: "dia" },
+      { href: "/diretoria/inscricoes", titulo: "Inscrições", grupo: "dia" },
+      { href: "/diretoria/pagamentos", titulo: "Pagamentos", grupo: "dia" },
+      {
+        href: "/diretoria/validacao",
+        titulo: "Validação",
+        grupo: "dia",
+        tambem: ["/diretoria/ingresso", "/diretoria/portaria"],
+      },
+      { href: "/diretoria/eventos", titulo: "Eventos", grupo: "admin" },
+      { href: "/diretoria/modalidades", titulo: "Modalidades", grupo: "admin" },
+      { href: "/diretoria/avisos", titulo: "Avisos", grupo: "admin" },
+      { href: "/diretoria/igrejas", titulo: "Igrejas", grupo: "admin" },
+      { href: "/diretoria/site", titulo: "Site", grupo: "admin" },
+      { href: "/diretoria/usuarios", titulo: "Usuários", grupo: "admin" },
+      { href: "/diretoria/equipe", titulo: "Equipe", grupo: "admin" },
+    ] satisfies AbaDiretoria[]
+  ).filter((a) => admin || a.grupo === "dia");
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-3xl">Diretoria</h1>
         <p className="text-sm text-apagado">
           {sessao.nome ?? sessao.email} · {ROTULO_PAPEL[sessao.papel]}
         </p>
       </div>
 
-      <AbasDiretoria abas={abas} />
-
-      <div className="pt-6">{children}</div>
+      <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+        <AbasDiretoria abas={abas} />
+        <div className="min-w-0">{children}</div>
+      </div>
     </div>
   );
 }
