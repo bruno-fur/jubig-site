@@ -20,10 +20,18 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
   const abas: (AbaDiretoria & { soAdmin: boolean })[] = [
     { href: "/diretoria", titulo: "Visão geral", soAdmin: false },
     { href: "/diretoria/inscricoes", titulo: "Inscrições", soAdmin: false },
-    { href: "/diretoria/portaria", titulo: "Portaria", soAdmin: false, tambem: ["/diretoria/ingresso"] },
+    { href: "/diretoria/pagamentos", titulo: "Pagamentos", soAdmin: false },
+    {
+      href: "/diretoria/validacao",
+      titulo: "Validação",
+      soAdmin: false,
+      tambem: ["/diretoria/ingresso", "/diretoria/portaria"],
+    },
+    { href: "/diretoria/eventos", titulo: "Eventos", soAdmin: true },
     { href: "/diretoria/avisos", titulo: "Avisos", soAdmin: true },
     { href: "/diretoria/modalidades", titulo: "Modalidades", soAdmin: true },
     { href: "/diretoria/igrejas", titulo: "Igrejas", soAdmin: true },
+    { href: "/diretoria/site", titulo: "Site", soAdmin: true },
     { href: "/diretoria/usuarios", titulo: "Usuários", soAdmin: true },
     { href: "/diretoria/equipe", titulo: "Equipe", soAdmin: true },
   ].filter((a) => admin || !a.soAdmin);

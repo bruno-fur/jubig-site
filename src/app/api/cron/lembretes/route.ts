@@ -3,6 +3,7 @@ import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { Emails } from "@/lib/email";
 import { LIMITE_DISPARO, enviarEmFila, responsaveisDoEvento } from "@/lib/disparo";
 import { formatarData } from "@/lib/validacao";
+import { atualizarInstagram } from "@/lib/instagram";
 
 /**
  * Lembretes automáticos, chamados uma vez por dia pela Vercel (vercel.json).
@@ -85,7 +86,10 @@ export async function GET(req: Request) {
   }
 
   console.log("[lembretes]", hoje, JSON.stringify(relatorio));
-  return NextResponse.json({ hoje, relatorio });
+  // Renova a chave do Instagram mesmo sem visita na home: ela expira em 60 dias.
+  const instagram = await atualizarInstagram().catch((e) => ({ ok: false, erro: String(e) }));
+
+  return NextResponse.json({ hoje, relatorio, instagram });
 }
 
 /** A Vercel roda em UTC; às 21h de Brasília já é "amanhã" lá. */

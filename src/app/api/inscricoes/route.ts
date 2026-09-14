@@ -146,6 +146,8 @@ function traduzirErro(msg: string) {
   if (msg.includes("inscrito_unico_por_evento")) return { erro: "cpf_ja_inscrito" };
   if (msg.includes("evento_lotado")) return { erro: "evento_lotado" };
   if (msg.includes("inscricoes_encerradas")) return { erro: "inscricoes_encerradas" };
+  if (msg.includes("inscricoes_nao_abertas")) return { erro: "inscricoes_nao_abertas" };
+  if (msg.includes("evento_sem_inscricao")) return { erro: "evento_sem_inscricao" };
   if (msg.includes("evento_nao_encontrado")) return { erro: "evento_nao_encontrado" };
   if (msg.includes("parcelas fora do permitido")) return { erro: "parcelas_acima_do_limite" };
   // A política de insert é a camada 4: chegar aqui significa e-mail não confirmado.

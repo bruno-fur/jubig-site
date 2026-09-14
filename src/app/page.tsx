@@ -1,37 +1,33 @@
-import Link from "next/link";
-import {
-  agendaCompleta,
-  daquiPraFrente,
-  hojeISO,
-  igrejasAtivas,
-  inscricoesAbertas,
-  eventoPorSlug,
-  vagasRestantes,
-} from "@/lib/eventos";
-import { formatarData, formatarReais } from "@/lib/validacao";
+import { agendaCompleta, daquiPraFrente, hojeISO, igrejasAtivas, eventoPorSlug, vagasRestantes } from "@/lib/eventos";
+import { formatarData } from "@/lib/validacao";
+import { lerConfiguracoes } from "@/lib/configuracoes";
+import { postagensInstagram, type PostagemInstagram } from "@/lib/instagram";
 import { Galeria } from "@/components/Galeria";
 import { Calendario } from "@/components/Calendario";
 import { MapaIgrejas } from "@/components/MapaIgrejas";
+import { ChamadaEvento } from "@/components/ChamadaEvento";
 import { ROTULO_TIPO, type Igreja, type ItemAgenda } from "@/tipos/db";
-
-import { INSTAGRAM } from "@/lib/site";
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export default async function Home() {
   const hoje = hojeISO();
-  const [agenda, igrejas] = await Promise.all([agendaCompleta(), igrejasAtivas()]);
-  const futuros = daquiPraFrente(agenda, hoje);
-  const destaque = futuros[0];
+  const [agenda, igrejas, config, instagram] = await Promise.all([
+    agendaCompleta(),
+    igrejasAtivas(),
+    lerConfiguracoes(),
+    postagensInstagram(),
+  ]);
+  const destaque = daquiPraFrente(agenda, hoje)[0];
 
   return (
     <>
       <Hero item={destaque} />
       <Atalhos temAgenda={agenda.length > 0} temIgrejas={igrejas.length > 0} />
-      <QuemSomos />
+      <QuemSomos texto={config.quemSomos} />
       <Agenda agenda={agenda} hoje={hoje} />
       <Onde igrejas={igrejas} />
+      <Instagram usuario={instagram.usuario ?? config.instagram} postagens={instagram.postagens} />
       <Galeria limite={8} />
-      <Contato />
+      <Contato whatsapp={config.whatsapp} instagram={config.instagram} />
     </>
   );
 }
@@ -49,10 +45,9 @@ async function Hero({ item }: { item?: ItemAgenda }) {
     );
   }
 
-  // O hero é o único lugar que precisa do evento inteiro: vagas e prazo.
+  // O hero é o único lugar que precisa do evento inteiro: vagas, prazo e abertura.
   const evento = await eventoPorSlug(item.slug);
   const restantes = evento ? await vagasRestantes(evento) : null;
-  const abertas = evento ? inscricoesAbertas(evento) : false;
   const poucas = restantes !== null && restantes <= 20 && restantes > 0;
 
   return (
@@ -74,37 +69,7 @@ async function Hero({ item }: { item?: ItemAgenda }) {
           </p>
           {item.descricao && <p className="mt-4 max-w-prose text-tinta/80">{item.descricao}</p>}
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {item.tem_inscricao && abertas ? (
-              <Link href={`/${item.slug}/inscricao`} className="botao-primario">
-                Inscrever
-                {item.valor_centavos > 0 && ` — ${formatarReais(item.valor_centavos)} por pessoa`}
-              </Link>
-            ) : item.tem_inscricao ? (
-              <span className="rounded-[10px] bg-tinta/10 px-5 py-3 font-semibold text-apagado">
-                Inscrições encerradas
-              </span>
-            ) : (
-              <span className="rounded-[10px] bg-ok/10 px-5 py-3 font-semibold text-ok">
-                Entrada franca, é só chegar
-              </span>
-            )}
-            <Link href={`/${item.slug}`} className="botao-secundario">
-              Ver detalhes
-            </Link>
-          </div>
-
-          {poucas && (
-            <p className="mt-4 inline-flex items-center gap-2 rounded-[10px] bg-white px-3 py-2 text-sm font-semibold text-laranja-escuro">
-              <img src="/juca/susto.webp" alt="" className="h-7 w-7 object-contain" />
-              Restam {restantes} vagas
-            </p>
-          )}
-          {evento?.inscricoes_ate && abertas && item.tem_inscricao && (
-            <p className="mt-3 text-sm text-apagado">
-              Inscrições até {formatarData(evento.inscricoes_ate)}.
-            </p>
-          )}
+          {evento && <ChamadaEvento evento={evento} restantes={restantes} detalhes />}
         </div>
 
         <img
@@ -145,16 +110,21 @@ function Atalhos({ temAgenda, temIgrejas }: { temAgenda: boolean; temIgrejas: bo
   );
 }
 
-function QuemSomos() {
+/** Texto editável em Diretoria > Site; sem texto cadastrado, fica o padrão. */
+function QuemSomos({ texto }: { texto: string | null }) {
   return (
     <section id="quem-somos" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
       <h2 className="text-3xl">Quem somos</h2>
       <div className="mt-4 grid gap-6 sm:grid-cols-3">
-        <p className="text-apagado sm:col-span-2">
-          A JUBIG reúne a juventude das igrejas batistas do oeste do Paraná. São encontros de
-          esporte, música e comunhão que juntam caravanas de cidades inteiras — de Medianeira a
-          Assis Chateaubriand, passando pela tríplice fronteira.
-        </p>
+        {texto ? (
+          <p className="whitespace-pre-line text-apagado sm:col-span-2">{texto}</p>
+        ) : (
+          <p className="text-apagado sm:col-span-2">
+            A JUBIG reúne a juventude das igrejas batistas do oeste do Paraná. São encontros de
+            esporte, música e comunhão que juntam caravanas de cidades inteiras — de Medianeira a
+            Assis Chateaubriand, passando pela tríplice fronteira.
+          </p>
+        )}
         <div className="cartao p-5">
           <p className="titulo text-lg">O que a gente faz</p>
           <ul className="mt-2 space-y-2 text-sm text-apagado">
@@ -248,7 +218,57 @@ function Onde({ igrejas }: { igrejas: Igreja[] }) {
   );
 }
 
-function Contato() {
+/**
+ * Últimas postagens, pela API oficial. Sem conta conectada ou sem postagem
+ * guardada, a seção não aparece — nada de caixa vazia na home.
+ */
+function Instagram({ usuario, postagens }: { usuario: string; postagens: PostagemInstagram[] }) {
+  if (postagens.length === 0) return null;
+
+  return (
+    <section id="instagram" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-3xl">No Instagram</h2>
+        <a
+          href={`https://instagram.com/${usuario}`}
+          target="_blank"
+          rel="noreferrer"
+          className="font-semibold text-laranja-escuro hover:underline"
+        >
+          Seguir @{usuario}
+        </a>
+      </div>
+
+      <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {postagens.map((p) => (
+          <li key={p.id}>
+            <a
+              href={p.link}
+              target="_blank"
+              rel="noreferrer"
+              className="relative block overflow-hidden rounded-[16px] border border-linha bg-white hover:border-laranja"
+            >
+              <img
+                src={p.imagem}
+                alt={p.legenda ? p.legenda.slice(0, 140) : `Postagem de @${usuario}`}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="aspect-square w-full object-cover"
+              />
+              {p.tipo === "VIDEO" && (
+                <span className="absolute top-2 right-2 rounded-full bg-tinta/75 px-2 py-0.5 text-[11px] font-semibold text-creme">
+                  vídeo
+                </span>
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Contato({ whatsapp, instagram }: { whatsapp: string; instagram: string }) {
   return (
     <section id="contato" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-14">
       <div className="cartao flex flex-wrap items-center gap-6 p-7">
@@ -260,16 +280,16 @@ function Contato() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <a href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noreferrer" className="botao-primario">
+          <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer" className="botao-primario">
             WhatsApp
           </a>
           <a
-            href={`https://instagram.com/${INSTAGRAM}`}
+            href={`https://instagram.com/${instagram}`}
             target="_blank"
             rel="noreferrer"
             className="botao-secundario"
           >
-            @{INSTAGRAM}
+            @{instagram}
           </a>
         </div>
       </div>

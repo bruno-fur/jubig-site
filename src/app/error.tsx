@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
-
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
+import { useEffect, useState } from "react";
 
 export default function Erro({ error, reset }: { error: Error; reset: () => void }) {
+  const [whatsapp, setWhatsapp] = useState<string | null>(null);
+
   useEffect(() => {
     console.error("[app]", error);
+    // Roda no navegador: o número de Diretoria > Site vem pela API pública.
+    fetch("/api/configuracoes")
+      .then((r) => r.json())
+      .then((d: { whatsapp?: string }) => setWhatsapp(d.whatsapp ?? null))
+      .catch(() => setWhatsapp(null));
   }, [error]);
 
   return (
@@ -22,8 +27,8 @@ export default function Erro({ error, reset }: { error: Error; reset: () => void
           Tentar de novo
         </button>
         <a
-          href={`https://wa.me/${WHATSAPP}`}
-          target="_blank"
+          href={whatsapp ? `https://wa.me/${whatsapp}` : "/#contato"}
+          target={whatsapp ? "_blank" : undefined}
           rel="noreferrer"
           className="botao-secundario"
         >

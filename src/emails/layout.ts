@@ -2,7 +2,11 @@ import { urlDoSite } from "../lib/site.ts";
 
 type Estado = "feliz" | "joia" | "nao" | "nervoso" | "choro" | "choque" | "heh" | "susto";
 
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
+/**
+ * Número usado ao montar o HTML. Na hora de enviar, `src/lib/email.ts` troca
+ * pelo que está em Diretoria > Site — os templates continuam síncronos.
+ */
+export const WHATSAPP_PADRAO = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
 export const CORES = {
   laranja: "#D94C1A",
@@ -17,7 +21,7 @@ export const CORES = {
 };
 
 export function linkWhatsApp(texto: string) {
-  return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(texto)}`;
+  return `https://wa.me/${WHATSAPP_PADRAO}?text=${encodeURIComponent(texto)}`;
 }
 
 type LayoutProps = {

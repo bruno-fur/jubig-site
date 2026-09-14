@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 export function MenuConta({ email, nome }: { email: string; nome: string | null }) {
   const [aberto, setAberto] = useState(false);
@@ -47,6 +48,22 @@ export function MenuConta({ email, nome }: { email: string; nome: string | null 
             <p className="truncate text-sm font-semibold text-tinta">{nome ?? "Minha conta"}</p>
             <p className="truncate text-xs text-apagado">{email}</p>
           </div>
+          <Link
+            href="/meu-perfil"
+            role="menuitem"
+            onClick={() => setAberto(false)}
+            className="block px-4 py-3 text-sm font-medium text-tinta hover:bg-areia"
+          >
+            Meu perfil
+          </Link>
+          <Link
+            href="/minhas-inscricoes"
+            role="menuitem"
+            onClick={() => setAberto(false)}
+            className="block border-b border-linha px-4 py-3 text-sm font-medium text-tinta hover:bg-areia"
+          >
+            Minhas inscrições
+          </Link>
           <form action="/sair" method="post">
             <button
               type="submit"

@@ -41,22 +41,30 @@ export function CartaoPortaria({
   dados,
   registrando,
   aoRegistrar,
+  liberadoAgora = false,
+  semMoldura = false,
 }: {
   dados: DadosCartao;
   registrando: boolean;
   aoRegistrar: () => void;
+  /** A entrada acabou de ser registrada por quem está com o celular: verde, não "já entrou". */
+  liberadoAgora?: boolean;
+  /** Dentro da janela da validação, que já tem a própria moldura. */
+  semMoldura?: boolean;
 }) {
   const confirmada = dados.status === "confirmada";
   const jaEntrou = Boolean(dados.checkinEm);
 
   const selo = !confirmada
     ? { texto: `Não liberado · ${ROTULO_STATUS[dados.status]}`, cor: "bg-ruim text-white", juca: "nao" }
-    : jaEntrou
-      ? { texto: `Já entrou · ${hora(dados.checkinEm!)}`, cor: "bg-laranja text-white", juca: "choque" }
-      : { texto: "Liberado para entrar", cor: "bg-ok text-white", juca: "joia" };
+    : liberadoAgora
+      ? { texto: "Entrada liberada", cor: "bg-ok text-white", juca: "joia" }
+      : jaEntrou
+        ? { texto: `Já entrou · ${hora(dados.checkinEm!)}`, cor: "bg-laranja text-white", juca: "choque" }
+        : { texto: "Pode entrar — confira e libere", cor: "bg-ok text-white", juca: "feliz" };
 
   return (
-    <article className="cartao overflow-hidden" aria-live="polite">
+    <article className={semMoldura ? "overflow-hidden" : "cartao overflow-hidden"} aria-live="polite">
       <div className={`flex items-center gap-3 px-5 py-4 ${selo.cor}`}>
         <img src={`/juca/${selo.juca}.webp`} alt="" className="h-12 w-12 object-contain" />
         <p className="titulo text-xl">{selo.texto}</p>
@@ -100,10 +108,10 @@ export function CartaoPortaria({
             {registrando ? (
               <>
                 <Girando />
-                Registrando...
+                Liberando...
               </>
             ) : (
-              "Confirmar entrada"
+              "Liberar entrada"
             )}
           </button>
         )}

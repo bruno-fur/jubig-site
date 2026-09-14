@@ -89,10 +89,46 @@ export function agruparPorTurno(esportes: VagaEsporte[]): [Turno, VagaEsporte[]]
   return ORDEM_TURNO.filter((t) => mapa.has(t)).map((t) => [t, mapa.get(t)!]);
 }
 
+export type SituacaoInscricoes = "sem_inscricao" | "em_breve" | "agendada" | "abertas" | "encerradas";
+
+type CamposDeInscricao = Pick<
+  Evento,
+  "tem_inscricao" | "data_evento" | "inscricoes_ate" | "inscricoes_de" | "inscricoes_em_breve"
+>;
+
+/**
+ * Onde as inscrições do evento estão agora.
+ *
+ * O banco confere a mesma coisa em `criar_inscricao` — aqui é só para a tela
+ * saber o que mostrar. Campos opcionais porque, antes do schema novo rodar,
+ * `inscricoes_de` e `inscricoes_em_breve` ainda não vêm do banco.
+ */
+export function situacaoInscricoes(evento: CamposDeInscricao, agora = new Date()): SituacaoInscricoes {
+  if (!evento.tem_inscricao) return "sem_inscricao";
+  if (hojeISO() > (evento.inscricoes_ate ?? evento.data_evento)) return "encerradas";
+  if (evento.inscricoes_em_breve) return "em_breve";
+  if (evento.inscricoes_de && new Date(evento.inscricoes_de) > agora) return "agendada";
+  return "abertas";
+}
+
 export function inscricoesAbertas(evento: Evento): boolean {
-  if (!evento.publicado) return false;
-  const limite = evento.inscricoes_ate ?? evento.data_evento;
-  return hojeISO() <= limite;
+  return evento.publicado && situacaoInscricoes({ ...evento, tem_inscricao: true }) === "abertas";
+}
+
+/** Já passou da hora de início? Fora do componente para o render continuar puro. */
+export function eventoJaComecou(evento: Pick<Evento, "data_evento" | "hora_inicio">, agora = new Date()): boolean {
+  return Date.parse(inicioDoEvento(evento)) <= agora.getTime();
+}
+
+/**
+ * Início do evento com fuso de Brasília, para a contagem regressiva.
+ *
+ * -03:00 fixo: o Brasil não tem horário de verão desde 2019. Sem hora
+ * cadastrada, conta até a meia-noite do dia.
+ */
+export function inicioDoEvento(evento: Pick<Evento, "data_evento" | "hora_inicio">): string {
+  const hora = (evento.hora_inicio ?? "00:00").slice(0, 5);
+  return `${evento.data_evento}T${hora}:00-03:00`;
 }
 
 /**

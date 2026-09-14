@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { formatarData, formatarReais } from "@/lib/validacao";
+import { situacaoInscricoes } from "@/lib/eventos";
+import { dataHoraBrasilia } from "@/components/ChamadaEvento";
 import { ROTULO_TIPO, RESUMO_TIPO, type ItemAgenda } from "@/tipos/db";
 
 /**
@@ -76,6 +78,14 @@ function ItemDaAgenda({ item, passou }: { item: ItemAgenda; passou: boolean }) {
             <span className="text-apagado">
               {item.pessoas > 0 ? `${item.pessoas} participantes` : "Já aconteceu"}
             </span>
+          ) : situacaoInscricoes(item) === "em_breve" ? (
+            <span className="font-semibold text-laranja-escuro">Inscrições em breve</span>
+          ) : situacaoInscricoes(item) === "agendada" && item.inscricoes_de ? (
+            <span className="font-semibold text-laranja-escuro">
+              Inscrições abrem {dataHoraBrasilia(item.inscricoes_de)}
+            </span>
+          ) : situacaoInscricoes(item) === "encerradas" ? (
+            <span className="text-apagado">Inscrições encerradas</span>
           ) : item.tem_inscricao ? (
             <>
               <Link

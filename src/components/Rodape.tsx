@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { lerConfiguracoes } from "@/lib/configuracoes";
 
-const WHATSAPP = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
-import { INSTAGRAM } from "@/lib/site";
+/** Contatos vêm de Diretoria > Site. */
+export async function Rodape() {
+  const { whatsapp: WHATSAPP, instagram: INSTAGRAM } = await lerConfiguracoes();
 
-export function Rodape() {
   return (
     <footer className="mt-16 border-t border-linha bg-tinta text-creme print:hidden">
       <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 sm:grid-cols-3">

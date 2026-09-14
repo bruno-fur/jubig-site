@@ -909,4 +909,154 @@ begin
   raise notice 'ok    igreja invalida no cadastro nao derruba a conta';
 end $$;
 
+-- ============================================================
+-- Eventos criados pelo painel e abertura das inscrições
+-- ============================================================
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+
+select espera_erro($x$
+  insert into eventos (slug, prefixo, nome, data_evento, cidade, valor_centavos)
+  values ('membro-cria', 'MC', 'Membro Cria', current_date + 30, 'Toledo', 1000)
+$x$, 'row-level security', 'membro nao cria evento');
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+insert into eventos (slug, prefixo, nome, data_evento, cidade, valor_centavos, publicado, inscricoes_em_breve)
+values ('teste-abertura', 'TA', 'Teste Abertura', current_date + 30, 'Toledo', 1000, true, true);
+do $$ begin raise notice 'ok    admin cria evento'; end $$;
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select espera_erro($x$
+  select criar_inscricao('teste-abertura', 1, '[{"nome":"Cedo Demais","cpf":"39053344705","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'inscricoes_nao_abertas', 'inscricoes em breve recusam inscricao');
+
+set role postgres;
+update eventos set inscricoes_em_breve = false, inscricoes_de = now() + interval '1 day'
+ where slug = 'teste-abertura';
+set role authenticated;
+
+select espera_erro($x$
+  select criar_inscricao('teste-abertura', 1, '[{"nome":"Antes Da Hora","cpf":"39053344705","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'inscricoes_nao_abertas', 'inscricao antes da hora de abertura recusada');
+
+set role postgres;
+update eventos set inscricoes_de = now() - interval '1 minute' where slug = 'teste-abertura';
+set role authenticated;
+
+do $$
+declare v text;
+begin
+  v := criar_inscricao('teste-abertura', 1, '[{"nome":"Na Hora Certa","cpf":"39053344705","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb);
+  raise notice 'ok    passada a hora de abertura a inscricao entra (%)', v;
+end $$;
+
+set role postgres;
+update eventos set tem_inscricao = false where slug = 'teste-abertura';
+set role authenticated;
+
+select espera_erro($x$
+  select criar_inscricao('teste-abertura', 1, '[{"nome":"Tour Sem Inscricao","cpf":"52998224725","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
+$x$, 'evento_sem_inscricao', 'evento sem inscricao recusa inscricao direto no banco');
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+select espera_erro($x$
+  delete from eventos where slug = 'teste-abertura'
+$x$, 'foreign key', 'evento com inscricao nao e apagado');
+
+insert into eventos (slug, prefixo, nome, data_evento, cidade, valor_centavos)
+values ('teste-apagar', 'AP', 'Teste Apagar', current_date + 30, 'Toledo', 0);
+delete from eventos where slug = 'teste-apagar';
+do $$
+begin
+  if exists (select 1 from eventos where slug = 'teste-apagar') then
+    raise exception 'FALHOU — admin deveria apagar evento sem inscricao';
+  end if;
+  raise notice 'ok    admin apaga evento sem inscricao';
+end $$;
+
+-- ============================================================
+-- Configurações do site e segredos
+-- ============================================================
+set role anon;
+do $$
+begin
+  if not exists (select 1 from configuracoes where id = 1) then
+    raise exception 'FALHOU — configuracoes do site deveriam ser publicas';
+  end if;
+  raise notice 'ok    configuracoes do site sao publicas';
+end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+update configuracoes set instagram = 'invasor' where id = 1;
+do $$
+begin
+  if (select instagram from configuracoes where id = 1) is not distinct from 'invasor' then
+    raise exception 'FALHOU — membro alterou as configuracoes do site';
+  end if;
+  raise notice 'ok    membro nao altera configuracoes do site';
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+update configuracoes set instagram = 'jubigoficial', whatsapp = '5545998112434' where id = 1;
+do $$
+begin
+  if (select instagram from configuracoes where id = 1) is distinct from 'jubigoficial' then
+    raise exception 'FALHOU — admin deveria alterar as configuracoes do site';
+  end if;
+  raise notice 'ok    admin altera configuracoes do site';
+end $$;
+
+set role postgres;
+insert into segredos (chave, valor) values ('instagram_token', 'segredo-de-teste')
+on conflict (chave) do nothing;
+set role authenticated;
+do $$
+begin
+  if exists (select 1 from segredos) then
+    raise exception 'FALHOU — segredos visiveis para admin logado';
+  end if;
+  if exists (select 1 from instagram_cache) then
+    raise exception 'FALHOU — cache do instagram visivel pelo navegador';
+  end if;
+  raise notice 'ok    segredos e cache do instagram fechados ate para o admin logado';
+end $$;
+
+set role postgres;
+
+-- ============================================================
+-- Meu perfil: a pessoa edita os próprios dados, não a confirmação
+-- ============================================================
+set role authenticated;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+
+select espera_erro($x$
+  update perfis set email_confirmado_em = now() where id = '22222222-2222-2222-2222-222222222222'
+$x$, 'email_confirmado_em_protegido', 'pessoa nao confirma o proprio e-mail pelo navegador');
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+update perfis
+   set nome = 'Bruno Editado', igreja = 'Texto Qualquer', igreja_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+ where id = '11111111-1111-1111-1111-111111111111';
+
+do $$
+begin
+  if (select nome from perfis where id = '11111111-1111-1111-1111-111111111111') <> 'Bruno Editado' then
+    raise exception 'FALHOU — pessoa deveria editar o proprio nome';
+  end if;
+  raise notice 'ok    pessoa edita o proprio perfil';
+
+  if (select igreja from perfis where id = '11111111-1111-1111-1111-111111111111') <> 'PIB Assis (Assis Chateaubriand)' then
+    raise exception 'FALHOU — nome da igreja deveria vir do cadastro, nao do texto enviado';
+  end if;
+  raise notice 'ok    nome da igreja no perfil vem do cadastro';
+
+  if (select email_confirmado_em from perfis where id = '11111111-1111-1111-1111-111111111111') is null then
+    raise exception 'FALHOU — editar o perfil nao pode desconfirmar o e-mail';
+  end if;
+  raise notice 'ok    editar o perfil mantem a confirmacao do e-mail';
+end $$;
+
+set role postgres;
+
 select 'TODOS OS TESTES PASSARAM' as resultado;

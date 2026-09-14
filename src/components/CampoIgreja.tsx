@@ -1,9 +1,9 @@
 "use client";
 
 import { useId, useMemo } from "react";
+import Link from "next/link";
 import { AncoraJuca } from "./juca/Ancora";
 import { useJuca } from "./juca/contexto";
-import { INSTAGRAM } from "@/lib/site";
 import type { OpcaoIgreja } from "@/tipos/db";
 
 /**
@@ -84,16 +84,11 @@ export function CampoIgreja({
         </p>
       ) : (
         <p id={`${id}-dica`} className="mt-1.5 text-sm text-apagado">
-          Sua igreja não está na lista? Peça para a diretoria cadastrar pelo Instagram{" "}
-          <a
-            href={`https://instagram.com/${INSTAGRAM}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-laranja-escuro hover:underline"
-          >
-            @{INSTAGRAM}
-          </a>
-          .
+          Sua igreja não está na lista?{" "}
+          <Link href="/#contato" className="font-semibold text-laranja-escuro hover:underline">
+            Fale com a diretoria
+          </Link>{" "}
+          para cadastrar.
         </p>
       )}
     </div>

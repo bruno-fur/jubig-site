@@ -8,11 +8,14 @@ import {
   esportesDoEvento,
   agruparPorTurno,
   inscricoesAbertas,
+  situacaoInscricoes,
   vagasRestantes,
   igrejasParaEscolha,
 } from "@/lib/eventos";
 import { formatarData, formatarReais } from "@/lib/validacao";
 import { FormularioInscricao } from "./FormularioInscricao";
+import { Contagem } from "@/components/Contagem";
+import { dataHoraBrasilia } from "@/components/ChamadaEvento";
 
 export async function generateMetadata({
   params,
@@ -42,6 +45,40 @@ export default async function PaginaInscricao({
    * página do evento, que explica que a entrada é franca.
    */
   if (!evento.tem_inscricao) redirect(`/${evento.slug}`);
+
+  const situacao = situacaoInscricoes(evento);
+
+  if (evento.publicado && situacao === "agendada" && evento.inscricoes_de) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+        <img src="/juca/nervoso.webp" alt="" className="mx-auto w-32" />
+        <h1 className="mt-4 text-3xl">Quase lá!</h1>
+        <p className="mt-2 text-apagado">
+          As inscrições do {evento.nome} abrem {dataHoraBrasilia(evento.inscricoes_de)}. Deixe esta
+          página aberta: o formulário aparece sozinho na hora.
+        </p>
+        <div className="mt-6 flex justify-center">
+          <Contagem alvo={evento.inscricoes_de} titulo="Abre em" recarregarAoZerar />
+        </div>
+      </div>
+    );
+  }
+
+  if (evento.publicado && situacao === "em_breve") {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 text-center">
+        <img src="/juca/heh.webp" alt="" className="mx-auto w-32" />
+        <h1 className="mt-4 text-3xl">Inscrições em breve</h1>
+        <p className="mt-2 text-apagado">
+          A diretoria ainda está fechando os detalhes do {evento.nome}. A data de abertura sai no
+          Instagram e aqui no site.
+        </p>
+        <Link href={`/${evento.slug}`} className="botao-secundario mt-6">
+          Ver o evento
+        </Link>
+      </div>
+    );
+  }
 
   if (!inscricoesAbertas(evento)) {
     return (

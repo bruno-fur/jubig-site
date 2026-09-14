@@ -575,6 +575,10 @@ function mensagemDeErro(corpo: { erro?: string; inscrito?: string; minima?: numb
       return "Passou do limite de modalidades permitido no turno.";
     case "evento_lotado":
       return "As vagas do evento acabaram.";
+    case "inscricoes_nao_abertas":
+      return "As inscrições deste evento ainda não abriram.";
+    case "evento_sem_inscricao":
+      return "Este evento não tem inscrição: é só chegar.";
     case "inscricoes_encerradas":
       return "As inscrições deste evento já fecharam.";
     case "parcelas_acima_do_limite":

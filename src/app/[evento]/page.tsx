@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { eventoPorSlug, esportesDoEvento, agruparPorTurno, inscricoesAbertas, vagasRestantes } from "@/lib/eventos";
-import { formatarData, formatarReais } from "@/lib/validacao";
+import { eventoPorSlug, esportesDoEvento, agruparPorTurno, vagasRestantes } from "@/lib/eventos";
+import { formatarData } from "@/lib/validacao";
+import { ChamadaEvento } from "@/components/ChamadaEvento";
 import { Abas } from "@/components/Abas";
 import { Galeria } from "@/components/Galeria";
 import { ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
@@ -53,8 +53,6 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       .limit(5),
   ]);
 
-  const abertas = evento.tem_inscricao && inscricoesAbertas(evento);
-  const poucas = restantes !== null && restantes > 0 && restantes <= 20;
 
   /*
    * Congresso não tem modalidade e tour não tem inscrição. Montar as abas a
@@ -191,28 +189,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
           </p>
           {evento.descricao && <p className="mt-4 max-w-prose text-tinta/80">{evento.descricao}</p>}
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {abertas ? (
-              <Link href={`/${evento.slug}/inscricao`} className="botao-primario">
-                Inscrever
-                {evento.valor_centavos > 0 && ` — ${formatarReais(evento.valor_centavos)} por pessoa`}
-              </Link>
-            ) : evento.tem_inscricao ? (
-              <span className="rounded-[10px] bg-tinta/10 px-5 py-3 font-semibold text-apagado">
-                Inscrições encerradas
-              </span>
-            ) : (
-              <span className="rounded-[10px] bg-ok/10 px-5 py-3 font-semibold text-ok">
-                Entrada franca, é só chegar
-              </span>
-            )}
-            {poucas && (
-              <span className="inline-flex items-center gap-2 rounded-[10px] bg-white px-3 py-2 text-sm font-semibold text-laranja-escuro">
-                <img src="/juca/susto.webp" alt="" className="h-7 w-7 object-contain" />
-                Restam {restantes} vagas
-              </span>
-            )}
-          </div>
+          <ChamadaEvento evento={evento} restantes={restantes} />
         </div>
       </section>
 

@@ -621,6 +621,18 @@ begin
     raise exception 'inscricoes_encerradas';
   end if;
 
+  -- Tour não tem inscrição; sem esta trava, bastava chamar a função direto.
+  if not v_evento.tem_inscricao then
+    raise exception 'evento_sem_inscricao';
+  end if;
+
+  -- "Em breve" e abertura agendada valem aqui também, não só na tela: quem
+  -- guardou o link do formulário não entra antes da hora.
+  if v_evento.inscricoes_em_breve
+     or (v_evento.inscricoes_de is not null and now() < v_evento.inscricoes_de) then
+    raise exception 'inscricoes_nao_abertas';
+  end if;
+
   v_quantos := coalesce(jsonb_array_length(p_inscritos), 0);
   if v_quantos < 1 then
     raise exception 'sem_inscritos';
@@ -969,6 +981,17 @@ alter table eventos add constraint eventos_tipo_valido
 alter table eventos add column if not exists tem_inscricao boolean not null default true;
 alter table eventos add column if not exists tem_modalidades boolean not null default true;
 
+/*
+ * Abertura das inscrições, controlada pelo painel:
+ *   inscricoes_em_breve = true      "Em breve", sem data
+ *   inscricoes_de no futuro         abre sozinha na data e hora, com contagem
+ *   nenhum dos dois                 abertas até inscricoes_ate
+ */
+alter table eventos add column if not exists inscricoes_de timestamptz;
+alter table eventos add column if not exists inscricoes_em_breve boolean not null default false;
+-- Hora de início, para a contagem regressiva chegar no minuto certo.
+alter table eventos add column if not exists hora_inicio time;
+
 -- ============================================================
 -- Igrejas da união
 --
@@ -1030,6 +1053,9 @@ with (security_invoker = false) as
     e.tem_inscricao,
     e.tem_modalidades,
     e.inscricoes_ate,
+    e.inscricoes_de,
+    e.inscricoes_em_breve,
+    e.hora_inicio,
     i.nome as igreja_nome,
     count(distinct ins.id) filter (
       where insc.status in ('aguardando_pagamento', 'em_analise', 'confirmada')
@@ -1296,3 +1322,108 @@ grant execute on function cancelar_inscricao(text, text) to authenticated;
 -- ============================================================
 alter table perfis add column if not exists igreja_id uuid references igrejas on delete set null;
 alter table inscritos add column if not exists igreja_id uuid references igrejas on delete set null;
+
+-- ============================================================
+-- Painel de administração do site
+--
+-- O que antes só mudava no código ou em variável de ambiente (WhatsApp,
+-- Instagram, texto do "Quem somos", criação de evento) passa a ser editado
+-- em Diretoria > Site e Diretoria > Eventos.
+-- ============================================================
+
+-- Admin cria e apaga evento pela tela. Apagar evento com inscrição falha na
+-- chave estrangeira — de propósito: inscrição paga não some.
+drop policy if exists "admin cria evento" on eventos;
+create policy "admin cria evento" on eventos
+  for insert with check (eh_admin());
+
+drop policy if exists "admin apaga evento" on eventos;
+create policy "admin apaga evento" on eventos
+  for delete using (eh_admin());
+
+-- Configurações do site: uma linha só (id = 1).
+create table if not exists configuracoes (
+  id int primary key default 1 check (id = 1),
+  whatsapp text,                       -- só dígitos, com DDI: 5545999990000
+  instagram text,                      -- sem @
+  email_contato text,
+  quem_somos text,
+  atualizado_em timestamptz default now(),
+  atualizado_por uuid references auth.users on delete set null
+);
+insert into configuracoes (id) values (1) on conflict (id) do nothing;
+
+alter table configuracoes enable row level security;
+
+drop policy if exists "configuracoes publicas" on configuracoes;
+create policy "configuracoes publicas" on configuracoes
+  for select using (true);
+
+drop policy if exists "admin edita configuracoes" on configuracoes;
+create policy "admin edita configuracoes" on configuracoes
+  for update using (eh_admin()) with check (eh_admin());
+
+/*
+ * Segredos que o site precisa guardar (hoje, a chave do Instagram).
+ *
+ * RLS ligada e nenhuma política: ninguém logado lê, nem admin. Só o servidor,
+ * com a service role. A chave dá acesso à conta do Instagram — não pode
+ * aparecer em resposta de API nem no navegador de ninguém.
+ */
+create table if not exists segredos (
+  chave text primary key,
+  valor text not null,
+  atualizado_em timestamptz default now()
+);
+alter table segredos enable row level security;
+
+-- Últimas postagens do Instagram, guardadas para a home não chamar a API a
+-- cada visita. Também só pelo servidor.
+create table if not exists instagram_cache (
+  id int primary key default 1 check (id = 1),
+  usuario text,
+  postagens jsonb not null default '[]'::jsonb,
+  atualizado_em timestamptz,
+  token_renovado_em timestamptz,
+  token_expira_em timestamptz,
+  erro text
+);
+insert into instagram_cache (id) values (1) on conflict (id) do nothing;
+alter table instagram_cache enable row level security;
+
+-- ============================================================
+-- Perfil editado pela própria pessoa (Meu perfil)
+--
+-- A política "perfil proprio" deixa o dono atualizar a própria linha — e isso
+-- incluía `email_confirmado_em`. Bastava um update pelo navegador para pular a
+-- confirmação e cair direto na camada 4 aberta. Agora só o servidor mexe
+-- nesse campo: a função de confirmação (security definer) e o admin (service
+-- role).
+--
+-- SECURITY INVOKER de propósito, como em proteger_ingresso: dentro de uma
+-- função definer, current_user vira o dono dela; aqui precisamos ver quem
+-- chamou de verdade.
+--
+-- De carona: com igreja_id preenchido, o nome da igreja sai sempre do
+-- cadastro — ninguém grava "PIB Toledo" à mão com o id de outra igreja.
+-- ============================================================
+create or replace function proteger_perfil() returns trigger
+language plpgsql as $fn$
+begin
+  if current_user in ('authenticated', 'anon')
+     and new.email_confirmado_em is distinct from old.email_confirmado_em then
+    raise exception 'email_confirmado_em_protegido';
+  end if;
+
+  if new.igreja_id is not null then
+    select nome || ' (' || cidade || ')' into new.igreja
+      from igrejas where id = new.igreja_id;
+  end if;
+
+  return new;
+end $fn$;
+
+drop trigger if exists perfil_protegido on perfis;
+create trigger perfil_protegido
+  before update on perfis
+  for each row execute function proteger_perfil();

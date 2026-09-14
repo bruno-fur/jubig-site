@@ -194,6 +194,25 @@ garante que sempre sobre ao menos um admin.
       no painel. Igreja que falta: a diretoria cadastra em Diretoria > Igrejas
 - [x] Aba atual da diretoria marcada (`aria-current`)
 
+### 8. Tudo pela tela, sem código
+- [x] Diretoria > Eventos: criar, editar, publicar, apagar (só sem inscrição),
+      programação e dúvidas. Prefixo do código é único — dois "JD" gerariam
+      dois JD-0001
+- [x] Abertura das inscrições: "em breve" (`inscricoes_em_breve`), agendada
+      (`inscricoes_de`, com contagem que abre sozinha) ou abertas. O banco
+      recusa em `criar_inscricao`, não só a tela
+- [x] Contagem regressiva até a abertura e até o dia do evento (`hora_inicio`)
+- [x] Diretoria > Site: WhatsApp, Instagram, e-mail, "Quem somos" (tabela
+      `configuracoes`). Env antiga vira só valor de reserva
+- [x] Instagram na home pela API oficial: chave colada na tela, guardada em
+      `segredos` (RLS sem política — nem admin lê), renovada a cada 7 dias
+- [x] Diretoria > Pagamentos: esperado, recebido, em análise, sem comprovante,
+      a devolver; CSV
+- [x] Validação (ex-portaria): câmera → janela com o inscrito → liberar →
+      "Próximo ingresso" ou "Sair"
+- [x] Meu perfil: nome, igreja, telefone, senha. Trigger `proteger_perfil`
+      impede a pessoa de confirmar o próprio e-mail por update direto
+
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 

@@ -15,6 +15,8 @@ import {
   type DadosLembrete,
   type DadosCancelamento,
 } from "@/emails/templates";
+import { WHATSAPP_PADRAO } from "@/emails/layout";
+import { lerConfiguracoes } from "@/lib/configuracoes";
 
 /*
  * Envio pelo SMTP do Gmail, com senha de app.
@@ -56,6 +58,11 @@ async function enviar(para: string, msg: { subject: string; html: string }) {
     return { ok: false as const, erro: "sem_credencial" };
   }
 
+  // WhatsApp do rodapé: o template sai com o padrão; aqui vira o de Diretoria > Site.
+  const { whatsapp } = await lerConfiguracoes();
+  const html =
+    whatsapp === WHATSAPP_PADRAO ? msg.html : msg.html.replaceAll(`wa.me/${WHATSAPP_PADRAO}`, `wa.me/${whatsapp}`);
+
   try {
     /*
      * O endereço do remetente é SEMPRE a conta autenticada. O Gmail reescreve
@@ -66,7 +73,7 @@ async function enviar(para: string, msg: { subject: string; html: string }) {
       from: { name: NOME, address: conn.usuario },
       to: para,
       subject: msg.subject,
-      html: msg.html,
+      html,
     });
     return { ok: true as const, id: info.messageId };
   } catch (e) {

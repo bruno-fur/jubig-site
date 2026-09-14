@@ -40,6 +40,12 @@ export type Evento = {
   max_parcelas: number;
   vagas: number | null;
   inscricoes_ate: string | null;
+  /** Abertura agendada (timestamptz). Nula = abre assim que publicar. */
+  inscricoes_de: string | null;
+  /** "Em breve", sem data: ninguém se inscreve até desligar. */
+  inscricoes_em_breve: boolean;
+  /** "08:00:00" — para a contagem regressiva chegar no minuto certo. */
+  hora_inicio: string | null;
   troca_esporte_ate_dias: number;
   tipo: TipoEvento;
   /** Congresso tem inscrição e não tem modalidade; tour não tem nenhuma das duas. */
@@ -226,6 +232,9 @@ export type ItemAgenda = {
   tem_inscricao: boolean;
   tem_modalidades: boolean;
   inscricoes_ate: string | null;
+  inscricoes_de: string | null;
+  inscricoes_em_breve: boolean;
+  hora_inicio: string | null;
   igreja_nome: string | null;
   pessoas: number;
 };

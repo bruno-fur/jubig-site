@@ -27,7 +27,7 @@ export default async function PaginaIngresso({ params }: { params: Promise<{ ing
           Esse QR não pertence a nenhuma inscrição. Pode ser ingresso de outro sistema ou um print
           adulterado.
         </p>
-        <Link href="/diretoria/portaria" className="botao-primario mt-6">
+        <Link href="/diretoria/validacao" className="botao-primario mt-6">
           Ler outro
         </Link>
       </div>
