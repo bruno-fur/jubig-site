@@ -224,6 +224,23 @@ garante que sempre sobre ao menos um admin.
 - [x] Diretoria > Modalidades > Inscritos: lista, confere se o parceiro também
       se inscreveu e sorteia times equilibrados pela nota (serpentina, nada salvo)
 
+- [x] Modalidade com gente inscrita também se apaga e muda de formato, com
+      confirmação que diz quantas pessoas perdem a escolha. Trocar o formato
+      limpa a nota/parceiros que deixaram de valer
+
+### 10. Pulseiras (equipes por cor)
+- [x] `equipes` por evento (nome, cor) e `inscritos.equipe_id`. JubigDay
+      sorteia **na chegada**: `registrar_checkin` chama `sortear_equipe`, que
+      põe a pessoa na equipe com menos gente. Congresso usa na gincana
+- [x] `equipe_id` protegido pelo mesmo trigger do check-in — sem isso o dono
+      escolhia a própria cor. Troca manual só por `mover_para_equipe`
+- [x] Pontos são lançamentos (`pontos_equipe`), não um total: erro de
+      digitação se apaga sem perder o resto. View `placar` pública; a página
+      do evento mostra depois do primeiro ponto
+- [x] Diretoria > Pulseiras e placar: placar, lançar pontos, quem está em
+      cada equipe (troca por seleção), sortear em lote, cores
+- [x] Visão geral e Pulseiras mostram um evento por vez (`?evento=slug`)
+
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 

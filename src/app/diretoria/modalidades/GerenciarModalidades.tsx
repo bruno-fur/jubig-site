@@ -25,9 +25,8 @@ type Props = {
 };
 
 const MENSAGEM: Record<string, string> = {
-  tem_inscritos: "Já tem gente inscrita nessa modalidade. Zere as vagas em vez de apagar.",
-  formato_com_inscritos:
-    "Já tem gente inscrita: trocar o formato deixaria escolhas sem nota ou parceiro. Crie outra modalidade.",
+  tem_inscritos: "Essa modalidade tem gente inscrita. Confirme para apagar.",
+  formato_com_inscritos: "Essa modalidade tem gente inscrita. Confirme a troca de formato.",
   sem_permissao: "Só administrador mexe nas modalidades.",
   pedido_invalido: "Confira os campos.",
   falha_ao_gravar: "Não deu para salvar agora.",
@@ -235,7 +234,7 @@ export function GerenciarModalidades({ eventos, esportes, ocupacao }: Props) {
                   inscritos={ocupacao[e.id] ?? 0}
                   ocupado={ocupado}
                   aoSalvar={(mudanca) => chamar("PATCH", { id: e.id, ...mudanca })}
-                  aoApagar={() => chamar("DELETE", { id: e.id })}
+                  aoApagar={() => chamar("DELETE", { id: e.id, forcar: true })}
                 />
               ))}
           </ul>
@@ -317,6 +316,10 @@ function Linha({
   const [formato, setFormato] = useState<FormatoModalidade>(esporte.formato ?? "individual");
   const [responsavel, setResponsavel] = useState(esporte.responsavel ?? "");
   const [descricao, setDescricao] = useState(esporte.descricao ?? "");
+  const [confirmarApagar, setConfirmarApagar] = useState(false);
+
+  const pessoas = `${inscritos} ${inscritos === 1 ? "pessoa" : "pessoas"}`;
+  const trocouFormato = !oficina && formato !== (esporte.formato ?? "individual");
 
   if (!editando) {
     return (
@@ -350,14 +353,44 @@ function Linha({
           </button>
           <button
             type="button"
-            disabled={ocupado || inscritos > 0}
-            title={inscritos > 0 ? "Tem gente inscrita" : undefined}
-            onClick={aoApagar}
+            disabled={ocupado}
+            onClick={() => (inscritos > 0 ? setConfirmarApagar(true) : void aoApagar())}
             className="font-semibold text-ruim hover:underline disabled:opacity-40 disabled:hover:no-underline"
           >
             Apagar
           </button>
         </span>
+
+        {/*
+          Com gente dentro, apagar tira a escolha dessas pessoas sem avisar
+          ninguém — por isso a confirmação diz quantas, e sugere olhar a
+          lista antes para saber quem chamar.
+        */}
+        {confirmarApagar && (
+          <div role="alert" className="w-full rounded-[10px] bg-ruim/10 p-3 text-sm text-ruim">
+            <p className="font-semibold">
+              {pessoas} escolheram {esporte.nome}. Apagando, elas perdem essa escolha — a inscrição continua valendo.
+            </p>
+            <p className="mt-1 text-tinta/80">
+              Veja em &quot;Inscritos&quot; quem são, para avisar e trocarem de modalidade.
+            </p>
+            <span className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={ocupado}
+                onClick={async () => {
+                  if (!(await aoApagar())) setConfirmarApagar(false);
+                }}
+                className="botao-primario bg-ruim px-4 py-2 text-sm hover:bg-ruim/85"
+              >
+                Apagar mesmo assim
+              </button>
+              <button type="button" onClick={() => setConfirmarApagar(false)} className="botao-secundario px-4 py-2 text-sm">
+                Cancelar
+              </button>
+            </span>
+          </div>
+        )}
       </li>
     );
   }
@@ -375,7 +408,7 @@ function Linha({
         </select>
         <input
           type="number"
-          min={Math.max(inscritos, 1)}
+          min={1}
           value={vagas}
           onChange={(e) => setVagas(Number(e.target.value))}
           aria-label="Vagas"
@@ -403,10 +436,8 @@ function Linha({
       ) : (
         <select
           value={formato}
-          disabled={inscritos > 0}
           onChange={(e) => setFormato(e.target.value as FormatoModalidade)}
           aria-label="Formato"
-          title={inscritos > 0 ? "Com gente inscrita o formato não muda" : undefined}
           className="campo-texto"
         >
           {(Object.keys(ROTULO_FORMATO) as FormatoModalidade[]).map((f) => (
@@ -417,6 +448,18 @@ function Linha({
         </select>
       )}
 
+      {vagas < inscritos && (
+        <p className="text-sm text-laranja-escuro">
+          Já são {pessoas} inscritas. Com {vagas} vagas ninguém é removido — a modalidade só fica lotada.
+        </p>
+      )}
+      {trocouFormato && inscritos > 0 && (
+        <p className="text-sm text-laranja-escuro">
+          {pessoas} já escolheram no formato antigo. Salvando, o que não vale mais some (nota ou parceiros), e quem
+          entrou antes aparece sem {formato === "time_sorteado" ? "nota — no sorteio conta como 0" : "parceiro"}.
+        </p>
+      )}
+
       <span className="flex gap-2">
         <button
           type="button"
@@ -424,7 +467,7 @@ function Linha({
           onClick={async () => {
             const mudanca = oficina
               ? { nome, vagas, turno, responsavel: responsavel || null, descricao: descricao || null }
-              : { nome, vagas, turno, ...(inscritos === 0 && { formato, categoria: "esporte" }) };
+              : { nome, vagas, turno, formato, categoria: "esporte", forcar: inscritos > 0 };
             if (await aoSalvar(mudanca)) setEditando(false);
           }}
           className="botao-primario px-4 py-2 text-sm"

@@ -31,6 +31,7 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
         grupo: "dia",
         tambem: ["/diretoria/ingresso", "/diretoria/portaria"],
       },
+      { href: "/diretoria/pulseiras", titulo: "Pulseiras e placar", grupo: "dia" },
       { href: "/diretoria/eventos", titulo: "Eventos", grupo: "admin" },
       { href: "/diretoria/modalidades", titulo: "Modalidades", grupo: "admin" },
       { href: "/diretoria/avisos", titulo: "Avisos", grupo: "admin" },

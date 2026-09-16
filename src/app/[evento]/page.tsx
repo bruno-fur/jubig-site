@@ -10,6 +10,7 @@ import type { ItemProgramacao } from "@/lib/programacao";
 import { Galeria } from "@/components/Galeria";
 import { ROTULO_FORMATO, ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
 import { rotuloModalidades } from "@/lib/modalidades";
+import { PlacarPublico } from "@/components/PlacarPublico";
 
 export async function generateMetadata({
   params,
@@ -37,7 +38,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     ? await supabase.from("igrejas").select("*").eq("id", evento.igreja_id).maybeSingle()
     : { data: null };
 
-  const [{ data: programacao }, { data: duvidas }, esportes, restantes, { data: avisos }] = await Promise.all([
+  const [{ data: programacao }, { data: duvidas }, esportes, restantes, { data: avisos }, { data: placar }] = await Promise.all([
     supabase
       .from("programacao")
       .select("*")
@@ -60,6 +61,8 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       .eq("evento_id", evento.id)
       .order("criado_em", { ascending: false })
       .limit(5),
+    // Idem: sem a view, só não aparece.
+    supabase.from("placar").select("*").eq("evento_id", evento.id),
   ]);
 
 
@@ -220,6 +223,8 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
             </ul>
           </section>
         )}
+
+        <PlacarPublico linhas={placar ?? []} />
 
         <Abas abas={abas} />
       </div>

@@ -7,6 +7,7 @@ import { formatarData, formatarReais, formatarCPF } from "@/lib/validacao";
 import { CartaoValidacao } from "@/components/CartaoValidacao";
 import { Exportar } from "@/components/Exportar";
 import { ROTULO_TURNO } from "@/tipos/db";
+import { SeletorEvento, escolherEvento } from "@/components/SeletorEvento";
 import type {
   Comprovante,
   Evento,
@@ -22,8 +23,21 @@ type Pendente = Comprovante & {
   inscricoes: Inscricao & { eventos: Evento; inscritos: Inscrito[] };
 };
 
-export default async function VisaoGeral() {
+/**
+ * Visão geral de UM evento por vez, escolhido no topo.
+ *
+ * Mostrar todos juntos empilhava números de três eventos, e a lista de
+ * igrejas misturava gente do JubigDay com a do Congresso sem dizer de qual
+ * era. O selo em cada evento conta os comprovantes esperando, para a fila de
+ * outro evento não passar despercebida.
+ */
+export default async function VisaoGeral({
+  searchParams,
+}: {
+  searchParams: Promise<{ evento?: string }>;
+}) {
   await exigirDiretoria();
+  const { evento: slug } = await searchParams;
   const supabase = await createClient();
 
   const [{ data: painel }, { data: igrejas }, { data: pendentesCru }, eventos] = await Promise.all([
@@ -45,7 +59,19 @@ export default async function VisaoGeral() {
    * comprovantes sem os números — em vez de derrubar o painel inteiro.
    */
   const numeros = (painel ?? []) as PainelEvento[];
-  const pendentes = (pendentesCru ?? []) as Pendente[];
+  const todosPendentes = (pendentesCru ?? []) as Pendente[];
+
+  const atual = escolherEvento(
+    numeros.map((n) => ({ ...n, data_fim: null })),
+    slug,
+    (n) => n.publicado
+  );
+  const n = atual ? numeros.find((x) => x.evento_id === atual.evento_id) : undefined;
+  const pendentes = todosPendentes.filter((c) => c.inscricoes.evento_id === n?.evento_id);
+  const pendentesPorEvento = new Map<string, number>();
+  for (const c of todosPendentes)
+    pendentesPorEvento.set(c.inscricoes.evento_id, (pendentesPorEvento.get(c.inscricoes.evento_id) ?? 0) + 1);
+  const igrejasDoEvento = ((igrejas ?? []) as PainelIgreja[]).filter((i) => i.evento_id === n?.evento_id);
 
   /*
    * Signed URL curta, gerada agora e só para quem já passou pela RLS.
@@ -60,18 +86,26 @@ export default async function VisaoGeral() {
     })
   );
 
-  // Ocupação por modalidade, do evento mais próximo.
-  // Sem `.order("turno")`: ordenar no banco quebraria enquanto a coluna ainda
-  // se chamar `horario`. `esportesDoEvento` já devolve na ordem certa.
-  const proximo = numeros.find((n) => n.publicado) ?? numeros[0];
-  const modalidades = proximo ? await esportesDoEvento(proximo.evento_id) : [];
+  // Sem `.order("turno")`: `esportesDoEvento` já devolve na ordem certa.
+  const modalidades = n ? await esportesDoEvento(n.evento_id) : [];
 
   return (
     <>
-      {numeros.map((n) => (
-        <section key={n.evento_id} className="mb-8">
+      <SeletorEvento
+        base="/diretoria"
+        atual={n?.slug ?? ""}
+        eventos={numeros.map((x) => ({
+          slug: x.slug,
+          nome: x.nome,
+          detalhe: x.publicado ? formatarData(x.data_evento) : "não publicado",
+          selo: pendentesPorEvento.get(x.evento_id),
+        }))}
+      />
+
+      {n && (
+        <section className="mb-8">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="titulo text-xl">{n.nome}</h2>
+            <h2 className="titulo text-2xl">{n.nome}</h2>
             <p className="text-sm text-apagado">
               {formatarData(n.data_evento)}
               {!n.publicado && " · não publicado"}
@@ -89,13 +123,13 @@ export default async function VisaoGeral() {
             <Numero rotulo="A receber" texto={formatarReais(n.a_receber_centavos)} />
           </div>
         </section>
-      ))}
+      )}
 
-      {igrejas && igrejas.length > 0 && (
+      {igrejasDoEvento.length > 0 && (
         <section className="mb-8">
           <h2 className="titulo text-xl">Pessoas por igreja</h2>
           <ul className="cartao mt-3 divide-y divide-linha">
-            {(igrejas as PainelIgreja[]).map((i) => (
+            {igrejasDoEvento.map((i) => (
               <li key={i.evento_id + i.igreja} className="flex justify-between gap-3 px-4 py-3 text-sm">
                 <span className="min-w-0 truncate text-tinta">{i.igreja}</span>
                 <span className="shrink-0 font-semibold text-apagado">{i.pessoas}</span>
@@ -147,7 +181,11 @@ export default async function VisaoGeral() {
           {comLink.length === 0 ? (
             <div className="cartao flex items-center gap-4 p-6">
               <img src="/juca/joia.webp" alt="" className="w-16" />
-              <p className="text-apagado">Fila limpa. Nada para validar agora.</p>
+              <p className="text-apagado">
+                {todosPendentes.length > 0
+                  ? "Nada para validar neste evento. O número ao lado de cada evento, lá em cima, mostra onde tem fila."
+                  : "Fila limpa. Nada para validar agora."}
+              </p>
             </div>
           ) : (
             comLink.map((c) => (

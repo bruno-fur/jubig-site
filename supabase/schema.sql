@@ -1190,7 +1190,9 @@ begin
   end if;
   if new.ingresso is distinct from old.ingresso
      or new.checkin_em is distinct from old.checkin_em
-     or new.checkin_por is distinct from old.checkin_por then
+     or new.checkin_por is distinct from old.checkin_por
+     -- A equipe também: senão a pessoa escolhia a própria cor antes do sorteio.
+     or new.equipe_id is distinct from old.equipe_id then
     raise exception 'ingresso_protegido';
   end if;
   return new;
@@ -1226,6 +1228,15 @@ begin
   if v_checkin is not null then return 'ja_entrou'; end if;
 
   update inscritos set checkin_em = now(), checkin_por = auth.uid() where id = v_id;
+
+  /*
+   * A pulseira sai junto com a entrada. No JubigDay as equipes são sorteadas
+   * na chegada, então quem lê o QR já fala a cor — uma chamada só na porta.
+   * Em evento sem equipe cadastrada, `sortear_equipe` não faz nada.
+   * Definida mais abaixo, no bloco "Equipes do JubigDay"; plpgsql só resolve
+   * o nome na hora de executar, então a ordem no arquivo não importa.
+   */
+  perform sortear_equipe(v_id);
   return 'ok';
 end $fn$;
 
@@ -1627,3 +1638,186 @@ update programacao
  where hora is null and horario ~ '[0-9]';
 
 create index if not exists programacao_ordem on programacao (evento_id, dia, hora);
+
+-- ============================================================
+-- Equipes do JubigDay
+--
+-- No dia, as pessoas não competem pela própria igreja: ao chegar, cada uma
+-- recebe a pulseira de uma das equipes (azul, vermelha, verde, amarela) por
+-- sorteio. Cada modalidade tem seu vencedor, e no fim do dia a equipe que
+-- somou mais pontos leva o dia.
+--
+-- Como o sorteio acontece na chegada, ele mora no check-in: a diretoria lê o
+-- QR e a tela já diz a cor da pulseira. Sortear na inscrição não serviria —
+-- muita gente se inscreve e não aparece, e os times ficariam desiguais.
+-- ============================================================
+create table if not exists equipes (
+  id uuid primary key default gen_random_uuid(),
+  evento_id uuid not null references eventos on delete cascade,
+  nome text not null,                  -- "Azul", "Vermelha"
+  cor text not null default '#D94C1A', -- hex, para o selo na tela
+  ordem int not null default 0,
+  criado_em timestamptz default now()
+);
+create index if not exists equipes_evento on equipes (evento_id, ordem);
+
+alter table inscritos add column if not exists equipe_id uuid references equipes on delete set null;
+create index if not exists inscritos_equipe on inscritos (equipe_id);
+
+/*
+ * Ponto lançado, não total guardado: com um número só, um erro de digitação
+ * some sem deixar rastro e ninguém lembra de onde veio a diferença. Assim a
+ * diretoria vê "Vôlei masculino +10" e pode apagar o lançamento errado.
+ */
+create table if not exists pontos_equipe (
+  id uuid primary key default gen_random_uuid(),
+  equipe_id uuid not null references equipes on delete cascade,
+  valor int not null,
+  motivo text,
+  criado_por uuid references auth.users default auth.uid(),
+  criado_em timestamptz default now()
+);
+create index if not exists pontos_equipe_time on pontos_equipe (equipe_id, criado_em desc);
+
+alter table equipes        enable row level security;
+alter table pontos_equipe  enable row level security;
+
+-- Placar é público: no dia, todo mundo acompanha pelo celular.
+drop policy if exists "equipes publicas" on equipes;
+create policy "equipes publicas" on equipes for select using (true);
+
+drop policy if exists "diretoria edita equipes" on equipes;
+create policy "diretoria edita equipes" on equipes
+  for all using (eh_diretoria()) with check (eh_diretoria());
+
+drop policy if exists "pontos publicos" on pontos_equipe;
+create policy "pontos publicos" on pontos_equipe for select using (true);
+
+drop policy if exists "diretoria lanca pontos" on pontos_equipe;
+create policy "diretoria lanca pontos" on pontos_equipe
+  for all using (eh_diretoria()) with check (eh_diretoria());
+
+/*
+ * Placar somado, sem expor quem está em cada time.
+ *
+ * Duas subconsultas em vez de dois left join: juntando pontos e inscritos na
+ * mesma linha, cada ponto se repete uma vez por pessoa do time e a soma sai
+ * multiplicada — 10 pontos viravam 300.
+ */
+drop view if exists placar;
+create view placar
+with (security_invoker = false) as
+  select
+    e.id as equipe_id,
+    e.evento_id,
+    e.nome,
+    e.cor,
+    e.ordem,
+    coalesce((select sum(p.valor) from pontos_equipe p where p.equipe_id = e.id), 0)::int as pontos,
+    (select count(*) from inscritos i where i.equipe_id = e.id and i.ativo)::int as pessoas
+  from equipes e;
+
+grant select on placar to anon, authenticated;
+
+/*
+ * Sorteia a equipe de quem acabou de chegar.
+ *
+ * Escolhe entre as que têm menos gente e desempata no aleatório: com sorteio
+ * puro, uma equipe termina o dia com dez a mais que a outra e o ponto corrido
+ * perde a graça.
+ *
+ * Devolve a equipe (nova ou a que a pessoa já tinha) para a tela da portaria
+ * mostrar a cor da pulseira.
+ */
+create or replace function sortear_equipe(p_inscrito uuid) returns uuid
+language plpgsql security definer set search_path = public as $fn$
+declare v_evento uuid; v_equipe uuid;
+begin
+  if not eh_diretoria() then return null; end if;
+
+  select evento_id, equipe_id into v_evento, v_equipe from inscritos where id = p_inscrito;
+  if v_evento is null then return null; end if;
+  if v_equipe is not null then return v_equipe; end if;
+
+  select e.id into v_equipe
+    from equipes e
+    left join inscritos i on i.equipe_id = e.id and i.ativo
+   where e.evento_id = v_evento
+   group by e.id
+   order by count(i.id), random()
+   limit 1;
+
+  if v_equipe is null then return null; end if;
+
+  update inscritos set equipe_id = v_equipe where id = p_inscrito;
+  return v_equipe;
+end $fn$;
+
+revoke all on function sortear_equipe(uuid) from public, anon;
+grant execute on function sortear_equipe(uuid) to authenticated;
+
+-- `registrar_checkin` chama `sortear_equipe` — está lá em cima, junto do
+-- resto da portaria, para a regra de entrada ficar toda num lugar só.
+
+/*
+ * Sorteio em lote, para quando a porta ficou sem sinal ou a diretoria
+ * preferiu sortear depois. `p_so_presentes` limita a quem já entrou;
+ * `p_refazer` limpa as equipes antes (pulseira já entregue não volta — por
+ * isso a tela pede confirmação).
+ *
+ * Um por um, em ordem aleatória, pela mesma regra do check-in: sempre na
+ * equipe com menos gente.
+ */
+create or replace function sortear_equipes(p_evento uuid, p_so_presentes boolean, p_refazer boolean)
+returns int
+language plpgsql security definer set search_path = public as $fn$
+declare v_id uuid; v_n int := 0;
+begin
+  if not eh_diretoria() then return 0; end if;
+
+  if p_refazer then
+    update inscritos set equipe_id = null
+     where evento_id = p_evento and (not p_so_presentes or checkin_em is not null);
+  end if;
+
+  for v_id in
+    select ins.id
+      from inscritos ins
+      join inscricoes i on i.id = ins.inscricao_id
+     where ins.evento_id = p_evento
+       and ins.ativo
+       and ins.equipe_id is null
+       and i.status = 'confirmada'
+       and (not p_so_presentes or ins.checkin_em is not null)
+     order by random()
+  loop
+    if sortear_equipe(v_id) is not null then v_n := v_n + 1; end if;
+  end loop;
+  return v_n;
+end $fn$;
+
+revoke all on function sortear_equipes(uuid, boolean, boolean) from public, anon;
+grant execute on function sortear_equipes(uuid, boolean, boolean) to authenticated;
+
+/*
+ * Troca manual de equipe. Confere que a equipe é do mesmo evento: sem isso,
+ * um id copiado de outro JubigDay jogava a pessoa num time que não existe no
+ * placar deste. `p_equipe` nulo tira a pessoa de qualquer equipe.
+ */
+create or replace function mover_para_equipe(p_inscrito uuid, p_equipe uuid) returns text
+language plpgsql security definer set search_path = public as $fn$
+declare v_evento uuid;
+begin
+  if not eh_diretoria() then return 'sem_permissao'; end if;
+  select evento_id into v_evento from inscritos where id = p_inscrito;
+  if v_evento is null then return 'nao_encontrado'; end if;
+  if p_equipe is not null
+     and not exists (select 1 from equipes where id = p_equipe and evento_id = v_evento) then
+    return 'equipe_de_outro_evento';
+  end if;
+  update inscritos set equipe_id = p_equipe where id = p_inscrito;
+  return 'ok';
+end $fn$;
+
+revoke all on function mover_para_equipe(uuid, uuid) from public, anon;
+grant execute on function mover_para_equipe(uuid, uuid) to authenticated;

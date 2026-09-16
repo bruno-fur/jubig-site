@@ -2,6 +2,7 @@
 
 import { formatarCPF, formatarDataCurta, formatarTelefone } from "@/lib/validacao";
 import { Girando } from "./Girando";
+import { nomeDaEquipe, textoSobre } from "@/lib/equipes";
 import { ROTULO_STATUS, type StatusInscricao } from "@/tipos/db";
 
 export type DadosCartao = {
@@ -20,6 +21,7 @@ export type DadosCartao = {
   responsavel: string | null;
   checkinEm: string | null;
   checkinPor: string | null;
+  equipe?: { nome: string; cor: string } | null;
 };
 
 const hora = (iso: string) =>
@@ -69,6 +71,20 @@ export function CartaoPortaria({
         <img src={`/juca/${selo.juca}.webp`} alt="" className="h-12 w-12 object-contain" />
         <p className="titulo text-xl">{selo.texto}</p>
       </div>
+
+      {/*
+        Pulseira em faixa grande logo abaixo do selo: é o que quem está na
+        porta fala em voz alta enquanto entrega a pulseira.
+      */}
+      {dados.equipe && (confirmada && (jaEntrou || liberadoAgora)) && (
+        <div
+          className="flex items-center justify-between gap-3 px-5 py-4"
+          style={{ background: dados.equipe.cor, color: textoSobre(dados.equipe.cor) }}
+        >
+          <span className="text-sm font-semibold uppercase tracking-wide">Pulseira</span>
+          <span className="titulo text-3xl">{nomeDaEquipe(dados.equipe.nome)}</span>
+        </div>
+      )}
 
       <div className="p-5">
         <p className="titulo text-2xl leading-tight">{dados.nome}</p>

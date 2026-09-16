@@ -1191,6 +1191,96 @@ begin
   raise notice 'ok    diretoria ve o painel do evento';
 end $$;
 
+-- ============================================================
+-- Equipes do JubigDay
+-- ============================================================
+set role postgres;
+insert into equipes (evento_id, nome, cor, ordem)
+select id, n, c, o from eventos,
+  (values ('Azul', '#1E63C6', 0), ('Vermelha', '#C62828', 1), ('Verde', '#2E7D32', 2)) as t(n, c, o)
+ where slug = 'jubigday-2026';
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+declare v_evento uuid := (select id from eventos where slug = 'jubigday-2026');
+begin
+  perform espera_erro(
+    $x$ update inscritos set equipe_id = (select id from equipes where nome = 'Azul') where nome = 'Bruno Furtado' $x$,
+    'ingresso_protegido', 'dono nao escolhe a propria equipe');
+
+  if sortear_equipes(v_evento, false, false) <> 0 then
+    raise exception 'FALHOU — usuario comum sorteou equipes';
+  end if;
+  if mover_para_equipe((select id from inscritos where nome = 'Bruno Furtado' limit 1), null) <> 'sem_permissao' then
+    raise exception 'FALHOU — usuario comum trocou equipe';
+  end if;
+  raise notice 'ok    usuario comum nao sorteia nem troca equipe';
+
+  perform espera_erro(
+    format($x$ insert into pontos_equipe (equipe_id, valor) select id, 100 from equipes where evento_id = %L $x$, v_evento),
+    'row-level security', 'usuario comum nao lanca ponto');
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare
+  v_evento uuid := (select id from eventos where slug = 'jubigday-2026');
+  v_azul uuid; v_vermelha uuid; v_outra uuid;
+  v_n int; v_p placar%rowtype; v_gente int;
+begin
+  select id into v_azul from equipes where evento_id = v_evento and nome = 'Azul';
+  select id into v_vermelha from equipes where evento_id = v_evento and nome = 'Vermelha';
+
+  v_n := sortear_equipes(v_evento, false, false);
+  if exists (
+    select 1 from inscritos ins join inscricoes i on i.id = ins.inscricao_id
+     where ins.evento_id = v_evento and ins.ativo and i.status = 'confirmada' and ins.equipe_id is null
+  ) then
+    raise exception 'FALHOU — sobrou confirmado sem equipe (sorteou %)', v_n;
+  end if;
+  if (select max(c) - min(c) from (
+        select count(i.id) c from equipes e
+          left join inscritos i on i.equipe_id = e.id and i.ativo
+         where e.evento_id = v_evento group by e.id) x) > 1 then
+    raise exception 'FALHOU — equipes desequilibradas';
+  end if;
+  raise notice 'ok    sorteio em lote deixa as equipes equilibradas (% sorteados)', v_n;
+
+  -- Todo mundo na Azul: com mais de uma pessoa, a view antiga multiplicava.
+  perform mover_para_equipe(id, v_azul) from inscritos where evento_id = v_evento and ativo;
+  select count(*) into v_gente from inscritos where equipe_id = v_azul and ativo;
+  insert into pontos_equipe (equipe_id, valor, motivo) values (v_azul, 10, 'Vôlei'), (v_azul, 5, 'Xadrez');
+  select * into v_p from placar where equipe_id = v_azul;
+  if v_p.pontos <> 15 or v_p.pessoas <> v_gente then
+    raise exception 'FALHOU — placar veio % pontos / % pessoas, esperado 15 / %', v_p.pontos, v_p.pessoas, v_gente;
+  end if;
+  raise notice 'ok    placar soma os pontos sem repetir por pessoa (% na equipe)', v_gente;
+
+  if mover_para_equipe((select id from inscritos where nome = 'Bruno Furtado' limit 1), v_vermelha) <> 'ok' then
+    raise exception 'FALHOU — diretoria nao trocou a equipe';
+  end if;
+  raise notice 'ok    diretoria troca a pessoa de equipe';
+
+  -- Equipe de outro evento é recusada.
+  insert into equipes (evento_id, nome, cor)
+  select id, 'Intrusa', '#000000' from eventos where id <> v_evento limit 1
+  returning id into v_outra;
+  if v_outra is not null and
+     mover_para_equipe((select id from inscritos where nome = 'Bruno Furtado' limit 1), v_outra) <> 'equipe_de_outro_evento' then
+    raise exception 'FALHOU — aceitou equipe de outro evento';
+  end if;
+  raise notice 'ok    equipe de outro evento recusada';
+end $$;
+
+-- Placar é público.
+set role anon;
+do $$
+begin
+  if not exists (select 1 from placar) then raise exception 'FALHOU — visitante nao ve o placar'; end if;
+  raise notice 'ok    placar aberto para quem acompanha pelo celular';
+end $$;
+
 set role postgres;
 
 select 'TODOS OS TESTES PASSARAM' as resultado;

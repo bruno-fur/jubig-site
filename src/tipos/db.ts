@@ -216,9 +216,9 @@ export const ROTULO_TIPO: Record<TipoEvento, string> = {
 
 /** Uma frase por tipo, para a agenda não repetir o nome do evento. */
 export const RESUMO_TIPO: Record<TipoEvento, string> = {
-  jubigday: "Um dia inteiro de quadra: as caravanas disputam as modalidades",
-  congresso: "Quatro dias de louvor, palavra e oficinas",
-  tour: "Uma noite na igreja anfitriã, entrada franca",
+  jubigday: "Um dia inteiro de esportes e comunhão",
+  congresso: "Quatro dias juntos: devocional, oficinas, gincana e mensagem à noite",
+  tour: "Sábado à noite numa igreja da união, em clima de PG",
 };
 
 /** O que o seletor de igreja do cadastro e da inscrição precisa. */
@@ -265,4 +265,32 @@ export type ItemAgenda = {
   hora_inicio: string | null;
   igreja_nome: string | null;
   pessoas: number;
+};
+
+/** Equipe do JubigDay: a cor da pulseira. */
+export type Equipe = {
+  id: string;
+  evento_id: string;
+  nome: string;
+  cor: string;
+  ordem: number;
+};
+
+/** Linha da view `placar`. */
+export type LinhaPlacar = {
+  equipe_id: string;
+  evento_id: string;
+  nome: string;
+  cor: string;
+  ordem: number;
+  pontos: number;
+  pessoas: number;
+};
+
+export type PontoEquipe = {
+  id: string;
+  equipe_id: string;
+  valor: number;
+  motivo: string | null;
+  criado_em: string;
 };

@@ -127,6 +127,8 @@ export type DadosPortaria = {
   responsavel: string | null;
   checkinEm: string | null;
   checkinPor: string | null;
+  /** Cor da pulseira no JubigDay. Nula até o check-in sortear. */
+  equipe: { nome: string; cor: string } | null;
 };
 
 type LinhaPortaria = {
@@ -168,7 +170,10 @@ export async function dadosDoIngresso(ingresso: string): Promise<DadosPortaria |
   if (!p) return null;
 
   const ids = [p.inscricoes.responsavel_id, p.checkin_por].filter(Boolean) as string[];
-  const { data: perfis } = await supabase.from("perfis").select("id, nome").in("id", ids);
+  const [{ data: perfis }, equipe] = await Promise.all([
+    supabase.from("perfis").select("id, nome").in("id", ids),
+    equipeDoIngresso(ingresso),
+  ]);
   const nome = (id: string | null) => perfis?.find((x) => x.id === id)?.nome || null;
 
   return {
@@ -190,5 +195,22 @@ export async function dadosDoIngresso(ingresso: string): Promise<DadosPortaria |
     responsavel: nome(p.inscricoes.responsavel_id),
     checkinEm: p.checkin_em,
     checkinPor: nome(p.checkin_por),
+    equipe,
   };
+}
+
+/**
+ * Consulta separada de propósito: enquanto o schema das equipes não roda em
+ * produção, ela falha sozinha e a portaria segue funcionando sem a cor.
+ */
+async function equipeDoIngresso(ingresso: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("inscritos")
+    .select("equipes(nome, cor)")
+    .eq("ingresso", ingresso)
+    .maybeSingle();
+  if (error) return null;
+  const e = (data as unknown as { equipes: { nome: string; cor: string } | null } | null)?.equipes;
+  return e ?? null;
 }

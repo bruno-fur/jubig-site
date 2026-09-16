@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { pegarSessao, papelDe } from "@/lib/sessao";
+import { criarClienteAdmin } from "@/lib/supabase/admin";
 
 const opcional = (max: number) =>
   z
@@ -82,16 +83,20 @@ export async function PATCH(req: Request) {
   const { erro } = await exigirAdminNaApi();
   if (erro) return erro;
 
-  const corpo = Modalidade.partial().extend({ id: z.uuid() }).safeParse(await req.json().catch(() => null));
+  const corpo = Modalidade.partial()
+    .extend({ id: z.uuid(), forcar: z.boolean().optional() })
+    .safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
-  const { id, ...campos } = corpo.data;
+  const { id, forcar, ...campos } = corpo.data;
 
   const supabase = await createClient();
 
   /*
-   * Mudar o formato de modalidade com gente dentro deixaria escolhas sem a
-   * nota ou o parceiro que o formato novo exige — o sorteio sairia torto.
+   * Mudar o formato com gente dentro é permitido, mas só confirmado: as
+   * escolhas antigas ficam sem a nota ou o parceiro que o formato novo pede
+   * (o sorteio trata nota vazia como 0). A tela avisa e manda `forcar`.
    */
+  let limpar = false;
   if (campos.formato !== undefined || campos.categoria !== undefined) {
     const [{ data: atual }, { count }] = await Promise.all([
       supabase.from("esportes").select("formato, categoria").eq("id", id).maybeSingle(),
@@ -100,15 +105,40 @@ export async function PATCH(req: Request) {
     const mudou =
       (campos.formato !== undefined && campos.formato !== atual?.formato) ||
       (campos.categoria !== undefined && campos.categoria !== atual?.categoria);
-    if (mudou && (count ?? 0) > 0)
+    if (mudou && (count ?? 0) > 0 && !forcar)
       return NextResponse.json({ erro: "formato_com_inscritos", inscritos: count }, { status: 409 });
+    limpar = mudou && (count ?? 0) > 0;
   }
 
-  const { error } = await supabase.from("esportes").update(colunas(campos)).eq("id", id);
+  const { data: gravado, error } = await supabase
+    .from("esportes")
+    .update(colunas(campos))
+    .eq("id", id)
+    .select("formato")
+    .single();
 
   if (error) {
     console.error("[modalidades] update falhou", error.message);
     return NextResponse.json({ erro: "falha_ao_gravar" }, { status: 400 });
+  }
+
+  /*
+   * Apaga o que o formato novo não usa: nota que sobrou de um time sorteado
+   * virado individual, parceiro de uma dupla virada time. Service role porque
+   * `inscritos_esportes` não tem política de update — nem a diretoria altera
+   * a escolha de alguém por fora desta rota.
+   */
+  if (limpar) {
+    const f = gravado?.formato;
+    const admin = criarClienteAdmin();
+    const { error: e2 } = await admin
+      .from("inscritos_esportes")
+      .update({
+        ...(f !== "time_sorteado" && { nota: null }),
+        ...(f !== "dupla" && f !== "trio" && { parceiros: null }),
+      })
+      .eq("esporte_id", id);
+    if (e2) console.error("[modalidades] limpeza das escolhas falhou", e2.message);
   }
   return NextResponse.json({ status: "ok" });
 }
@@ -117,24 +147,26 @@ export async function DELETE(req: Request) {
   const { erro } = await exigirAdminNaApi();
   if (erro) return erro;
 
-  const corpo = z.object({ id: z.uuid() }).safeParse(await req.json().catch(() => null));
+  const corpo = z
+    .object({ id: z.uuid(), forcar: z.boolean().optional() })
+    .safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
 
   const supabase = await createClient();
 
   /*
-   * Modalidade com gente dentro não é apagada.
+   * Modalidade com gente dentro só sai confirmada.
    *
-   * A chave estrangeira apaga em cascata as escolhas de `inscritos_esportes`,
-   * então um clique errado sumiria em silêncio com a modalidade de quem já
-   * estava inscrito — e nem a diretoria saberia quem avisar.
+   * A chave estrangeira apaga em cascata as escolhas de `inscritos_esportes`:
+   * sem a confirmação, um clique errado sumiria com a modalidade de quem já
+   * estava inscrito. A tela mostra quantos perdem a escolha e manda `forcar`.
    */
   const { count } = await supabase
     .from("inscritos_esportes")
     .select("inscrito_id", { count: "exact", head: true })
     .eq("esporte_id", corpo.data.id);
 
-  if ((count ?? 0) > 0)
+  if ((count ?? 0) > 0 && !corpo.data.forcar)
     return NextResponse.json({ erro: "tem_inscritos", inscritos: count }, { status: 409 });
 
   const { error } = await supabase.from("esportes").delete().eq("id", corpo.data.id);
