@@ -6,6 +6,7 @@ import { Galeria } from "@/components/Galeria";
 import { Calendario } from "@/components/Calendario";
 import { MapaIgrejas } from "@/components/MapaIgrejas";
 import { ChamadaEvento } from "@/components/ChamadaEvento";
+import { ElementosDoEvento } from "@/components/ElementosDoEvento";
 import { ROTULO_TIPO, RESUMO_TIPO, type Igreja, type ItemAgenda } from "@/tipos/db";
 
 export default async function Home() {
@@ -64,8 +65,9 @@ async function Hero({ item }: { item?: ItemAgenda }) {
   return (
     <section className="relative overflow-hidden border-b border-linha bg-areia">
       <Manchas />
+      <ElementosDoEvento tipo={item.tipo} />
 
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:px-8 lg:py-24">
+      <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:px-8 lg:py-24">
         <div>
           <p className="flex flex-wrap items-center gap-2 text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
             Próximo encontro
@@ -179,9 +181,10 @@ function QuemSomos({ texto }: { texto: string | null }) {
           <p className="whitespace-pre-line text-apagado lg:text-lg lg:leading-relaxed">{texto}</p>
         ) : (
           <p className="text-apagado lg:text-lg lg:leading-relaxed">
-            A JUBIG reúne a juventude das igrejas batistas do oeste do Paraná. São encontros de
-            esporte, música e comunhão que juntam caravanas de cidades inteiras — de Medianeira a
-            Assis Chateaubriand, passando pela tríplice fronteira.
+            JUBIG é a Juventude Batista do Iguaçu: os jovens das igrejas batistas que ficam no oeste
+            do Paraná, de Assis Chateaubriand e Cascavel até a tríplice fronteira. Ao longo do ano a
+            gente se encontra três vezes — um dia inteiro de quadra no JubigDay, quatro dias de
+            congresso no Carnaval e as visitas do JubigTour, cada uma numa igreja da união.
           </p>
         )}
 
@@ -211,8 +214,8 @@ function Agenda({ agenda, hoje }: { agenda: ItemAgenda[]; hoje: string }) {
         <h2 className="revelar text-3xl lg:text-4xl">Calendário</h2>
         <p className="revelar mt-2 text-apagado lg:text-lg">
           {futuros > 0
-            ? `${futuros} ${futuros === 1 ? "encontro marcado" : "encontros marcados"}. Tudo que já rolou fica abaixo.`
-            : "O que já rolou. As próximas datas aparecem aqui assim que fecharem."}
+            ? `${futuros} ${futuros === 1 ? "encontro marcado" : "encontros marcados"} para este ano. Abaixo, o que já passou.`
+            : "O que já passou. As próximas datas entram aqui assim que a diretoria fechar."}
         </p>
         <div className="revelar">
           <Calendario itens={agenda} hoje={hoje} />
@@ -229,8 +232,8 @@ function Onde({ igrejas }: { igrejas: Igreja[] }) {
     <section id="onde" className="mx-auto max-w-7xl scroll-mt-24 px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
       <h2 className="revelar text-3xl lg:text-4xl">Onde estamos</h2>
       <p className="revelar mt-2 text-apagado lg:text-lg">
-        {igrejas.length} {igrejas.length === 1 ? "igreja" : "igrejas e congregações"} batistas no
-        oeste do Paraná.
+        As {igrejas.length} igrejas e congregações que formam a JUBIG. Escolha a sua para ver onde
+        fica.
       </p>
 
       {/* Escolher a igreja no seletor e o mapa voar até ela — em vez da parede
@@ -303,9 +306,10 @@ function Contato({ whatsapp, instagram }: { whatsapp: string; instagram: string 
       <div className="revelar cartao flex flex-wrap items-center gap-6 p-7 lg:p-10">
         <img src="/juca/heh.webp" alt="" className="w-24 lg:w-32" />
         <div className="min-w-[240px] flex-1">
-          <h2 className="text-2xl lg:text-3xl">Ficou com dúvida?</h2>
+          <h2 className="text-2xl lg:text-3xl">Dúvida sobre inscrição, caravana ou pagamento?</h2>
           <p className="mt-1 text-apagado lg:text-lg">
-            Fala com a diretoria no WhatsApp ou acompanha o dia a dia no Instagram.
+            Chama a diretoria no WhatsApp — é por lá que a gente responde. No Instagram saem as
+            datas e as novidades primeiro.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

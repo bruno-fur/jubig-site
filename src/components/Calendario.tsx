@@ -105,7 +105,7 @@ function ItemDaAgenda({ item, passou }: { item: ItemAgenda; passou: boolean }) {
             </>
           ) : (
             // Tour não tem inscrição: a chamada é aparecer.
-            <span className="font-semibold text-ok">Entrada franca, é só chegar</span>
+            <span className="font-semibold text-ok">Entrada franca — leve a galera da sua igreja</span>
           )}
 
           <Link href={`/${item.slug}`} className="text-apagado hover:text-tinta hover:underline">

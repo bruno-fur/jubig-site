@@ -59,7 +59,7 @@ export function ChamadaEvento({
 
         {detalhes && (
           <Link href={`/${evento.slug}`} className="botao-secundario">
-            Ver detalhes
+            Programação e local
           </Link>
         )}
       </div>

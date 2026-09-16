@@ -216,9 +216,9 @@ export const ROTULO_TIPO: Record<TipoEvento, string> = {
 
 /** Uma frase por tipo, para a agenda não repetir o nome do evento. */
 export const RESUMO_TIPO: Record<TipoEvento, string> = {
-  jubigday: "Um dia de esporte, música e comunhão",
-  congresso: "Vários dias de congresso",
-  tour: "Visita a uma igreja da união",
+  jubigday: "Um dia inteiro de quadra: as caravanas disputam as modalidades",
+  congresso: "Quatro dias de louvor, palavra e oficinas",
+  tour: "Uma noite na igreja anfitriã, entrada franca",
 };
 
 /** O que o seletor de igreja do cadastro e da inscrição precisa. */

@@ -26,7 +26,7 @@ const texto = Outfit({
 export const metadata: Metadata = {
   title: { default: "Jubig", template: "%s · Jubig" },
   description:
-    "Encontros, esportes e inscrições da juventude das igrejas batistas do oeste do Paraná.",
+    "Juventude Batista do Iguaçu: as datas, as inscrições e as fotos dos encontros das igrejas batistas do oeste do Paraná.",
   openGraph: {
     type: "website",
     locale: "pt_BR",
