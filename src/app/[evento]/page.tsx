@@ -5,6 +5,8 @@ import { eventoPorSlug, esportesDoEvento, agruparPorTurno, vagasRestantes } from
 import { formatarData } from "@/lib/validacao";
 import { ChamadaEvento } from "@/components/ChamadaEvento";
 import { Abas } from "@/components/Abas";
+import { Programacao } from "@/components/Programacao";
+import type { ItemProgramacao } from "@/lib/programacao";
 import { Galeria } from "@/components/Galeria";
 import { ROTULO_FORMATO, ROTULO_TIPO, ROTULO_TURNO } from "@/tipos/db";
 import { rotuloModalidades } from "@/lib/modalidades";
@@ -36,7 +38,13 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
     : { data: null };
 
   const [{ data: programacao }, { data: duvidas }, esportes, restantes, { data: avisos }] = await Promise.all([
-    supabase.from("programacao").select("*").eq("evento_id", evento.id).order("ordem"),
+    supabase
+      .from("programacao")
+      .select("*")
+      .eq("evento_id", evento.id)
+      .order("dia", { nullsFirst: true })
+      .order("hora", { nullsFirst: false })
+      .order("ordem"),
     supabase
       .from("duvidas")
       .select("*")
@@ -66,19 +74,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
       titulo: "Programação",
       conteudo:
         programacao && programacao.length > 0 ? (
-          <ol className="cartao divide-y divide-linha">
-            {programacao.map((p) => (
-              <li key={p.id} className="flex gap-4 p-4">
-                <span className="titulo w-16 shrink-0 text-laranja-escuro">{p.horario}</span>
-                <span className="min-w-0">
-                  <span className="block font-semibold text-tinta">{p.titulo}</span>
-                  {p.descricao && (
-                    <span className="block text-sm text-apagado">{p.descricao}</span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <Programacao itens={programacao as unknown as ItemProgramacao[]} />
         ) : (
           <Vazio texto="A programação ainda está sendo fechada." />
         ),

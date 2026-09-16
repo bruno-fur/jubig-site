@@ -1593,3 +1593,37 @@ create policy "diretoria edita albuns" on albuns
 -- que foi cadastrado antes, e o site lê os dois.
 alter table galeria add column if not exists album_id uuid references albuns on delete set null;
 create index if not exists galeria_album on galeria (album_id, ordem);
+
+-- ============================================================
+-- Programação com hora de verdade
+--
+-- `horario` era texto livre ("08h30"), e texto ordena errado: "9h00" vem
+-- depois de "14h00". Vira `hora time`, que ordena sozinha e aceita o seletor
+-- de horário do celular.
+--
+-- `dia` existe porque congresso tem quatro dias: sem ele, a programação dos
+-- dias vira uma lista só, embaralhada. Nulo = evento de um dia.
+--
+-- `tipo` é o que deixa a tela montar a programação em um clique e marcar com
+-- cor o que é refeição, devocional ou atividade.
+-- ============================================================
+alter table programacao add column if not exists hora time;
+alter table programacao add column if not exists dia date;
+alter table programacao add column if not exists tipo text;
+
+alter table programacao drop constraint if exists programacao_tipo_valido;
+alter table programacao add constraint programacao_tipo_valido
+  check (tipo is null or tipo in (
+    'abertura', 'devocional', 'louvor', 'palestra', 'atividade',
+    'esporte', 'refeicao', 'intervalo', 'encerramento'
+  ));
+
+-- De-para do texto para hora, uma vez só. "08h30", "8:30" e "20h" entram.
+update programacao
+   set hora = make_time(
+         least((regexp_replace(horario, '^[^0-9]*([0-9]{1,2}).*$', '\1'))::int, 23),
+         least(coalesce(nullif(regexp_replace(horario, '^[^0-9]*[0-9]{1,2}[^0-9]+([0-9]{2}).*$', '\1'), horario), '0')::int, 59),
+         0)
+ where hora is null and horario ~ '[0-9]';
+
+create index if not exists programacao_ordem on programacao (evento_id, dia, hora);

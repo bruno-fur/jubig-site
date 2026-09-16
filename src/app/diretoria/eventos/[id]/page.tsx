@@ -23,7 +23,13 @@ export default async function EditarEvento({ params }: { params: Promise<{ id: s
       igrejasParaEscolha(),
       supabase.from("esportes").select("id", { count: "exact", head: true }).eq("evento_id", id),
       supabase.from("inscricoes").select("id", { count: "exact", head: true }).eq("evento_id", id),
-      supabase.from("programacao").select("*").eq("evento_id", id).order("ordem"),
+      supabase
+        .from("programacao")
+        .select("*")
+        .eq("evento_id", id)
+        .order("dia", { nullsFirst: true })
+        .order("hora", { nullsFirst: false })
+        .order("ordem"),
       supabase.from("duvidas").select("*").eq("evento_id", id).order("ordem"),
     ]);
 
@@ -85,6 +91,8 @@ export default async function EditarEvento({ params }: { params: Promise<{ id: s
 
       <ConteudoEvento
         eventoId={e.id}
+        dataEvento={e.data_evento}
+        dataFim={e.data_fim}
         programacao={(programacao ?? []) as ItemProgramacao[]}
         duvidas={(duvidas ?? []) as ItemDuvida[]}
       />
