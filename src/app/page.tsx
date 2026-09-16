@@ -233,49 +233,10 @@ function Onde({ igrejas }: { igrejas: Igreja[] }) {
         oeste do Paraná.
       </p>
 
-      {/* Mapa fixo à esquerda e lista rolando à direita: no computador, dá para
-          procurar a igreja sem perder o mapa de vista. */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-10">
-        <div className="lg:sticky lg:top-24">
-          <MapaIgrejas igrejas={igrejas} />
-        </div>
-
-        <ul className="grid gap-3 sm:grid-cols-2 lg:max-h-[540px] lg:grid-cols-1 lg:overflow-y-auto lg:pr-2 xl:grid-cols-2">
-          {igrejas.map((i) => (
-            <li key={i.id} className="cartao realce p-4">
-              <p className="font-semibold text-tinta">{i.nome}</p>
-              <p className="text-sm text-apagado">
-                {i.cidade} · {i.estado}
-              </p>
-              {i.endereco && <p className="mt-1 text-sm text-apagado">{i.endereco}</p>}
-
-              <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {i.endereco && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      `${i.nome}, ${i.endereco}, ${i.cidade}`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-laranja-escuro hover:underline"
-                  >
-                    Como chegar
-                  </a>
-                )}
-                {i.instagram && (
-                  <a
-                    href={`https://instagram.com/${i.instagram}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-apagado hover:text-tinta hover:underline"
-                  >
-                    @{i.instagram}
-                  </a>
-                )}
-              </p>
-            </li>
-          ))}
-        </ul>
+      {/* Escolher a igreja no seletor e o mapa voar até ela — em vez da parede
+          de quase 50 cartões que ficava aqui embaixo. */}
+      <div className="mt-6">
+        <MapaIgrejas igrejas={igrejas} />
       </div>
     </section>
   );
