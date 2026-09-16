@@ -24,6 +24,7 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
       { href: "/diretoria", titulo: "Visão geral", grupo: "dia" },
       { href: "/diretoria/inscricoes", titulo: "Inscrições", grupo: "dia" },
       { href: "/diretoria/pagamentos", titulo: "Pagamentos", grupo: "dia" },
+      { href: "/diretoria/galeria", titulo: "Galeria", grupo: "dia" },
       {
         href: "/diretoria/validacao",
         titulo: "Validação",

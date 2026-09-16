@@ -31,6 +31,11 @@ export async function Rodape() {
               </Link>
             </li>
             <li>
+              <Link href="/galeria" className="hover:text-laranja">
+                Galeria
+              </Link>
+            </li>
+            <li>
               <Link href="/minhas-inscricoes" className="hover:text-laranja">
                 Minhas inscrições
               </Link>
