@@ -33,7 +33,7 @@ export function AvisoPendencias({ comprovantes }: { comprovantes: number }) {
 
   return (
     <div role="status" className="border-t border-laranja/30 bg-laranja text-white">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-2 text-sm">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2 text-sm sm:px-6 lg:px-8">
         <img src="/juca/nervoso.webp" alt="" className="h-7 w-7 rounded-full bg-white/20 object-contain" />
         <p className="min-w-0 flex-1">
           <strong>

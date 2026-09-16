@@ -190,11 +190,11 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
   return (
     <>
       <section className="border-b border-linha bg-areia">
-        <div className="mx-auto max-w-3xl px-4 py-12">
+        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <p className="text-sm font-semibold tracking-wide text-laranja-escuro uppercase">
             {ROTULO_TIPO[evento.tipo]}
           </p>
-          <h1 className="mt-1 text-4xl">{evento.nome}</h1>
+          <h1 className="mt-1 text-4xl lg:text-5xl xl:text-6xl">{evento.nome}</h1>
           <p className="mt-2 text-lg text-apagado">
             {formatarData(evento.data_evento)}
             {evento.data_fim && ` a ${formatarData(evento.data_fim)}`} · {evento.cidade}
@@ -205,7 +205,7 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
         </div>
       </section>
 
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         {avisos && avisos.length > 0 && (
           <section aria-labelledby="titulo-avisos" className="mb-8">
             <h2 id="titulo-avisos" className="titulo mb-3 text-xl">

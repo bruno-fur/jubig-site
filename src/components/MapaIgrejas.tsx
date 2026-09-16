@@ -97,7 +97,7 @@ export function MapaIgrejas({ igrejas }: { igrejas: Igreja[] }) {
       ref={caixa}
       role="application"
       aria-label={`Mapa com ${comCoordenada.length} igrejas da JUBIG`}
-      className="h-[380px] w-full overflow-hidden rounded-[16px] border border-linha bg-areia"
+      className="h-[360px] w-full overflow-hidden rounded-[16px] border border-linha bg-areia lg:h-[540px]"
     />
   );
 }

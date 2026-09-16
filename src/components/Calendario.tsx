@@ -18,7 +18,7 @@ export function Calendario({ itens, hoje }: { itens: ItemAgenda[]; hoje: string 
   const meses = agruparPorMes(itens);
 
   return (
-    <ol className="mt-4 space-y-8">
+    <ol className="mt-4 space-y-8 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:space-y-0 lg:[&>li]:mb-8">
       {meses.map(([mes, doMes]) => (
         <li key={mes}>
           <h3 className="titulo text-sm tracking-wide text-apagado uppercase">{mes}</h3>
@@ -40,7 +40,7 @@ function ItemDaAgenda({ item, passou }: { item: ItemAgenda; passou: boolean }) {
   const [, mes, dia] = item.data_evento.split("-");
 
   return (
-    <article className={`cartao flex gap-4 p-4 ${passou ? "opacity-60" : ""}`}>
+    <article className={`cartao realce flex gap-4 p-4 ${passou ? "opacity-60" : ""}`}>
       <div
         className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-[10px] ${
           passou ? "bg-areia text-apagado" : "bg-laranja/10 text-laranja-escuro"

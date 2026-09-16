@@ -70,7 +70,7 @@ export function AvisoEmailNaoConfirmado({ email, variante = "topo" }: Props) {
 
   return (
     <div className="sticky top-0 z-40 border-b border-[#F2C4BE] bg-[#FBE6D5] print:hidden">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <img
           src="/juca/nervoso.webp"
           alt=""

@@ -22,11 +22,11 @@ export async function Galeria({ limite = 12, eventoId }: { limite?: number; even
   const base = supabase.storage.from("fotos");
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-14">
-      <h2 className="text-3xl">Galeria</h2>
-      <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      <h2 className="revelar text-3xl lg:text-4xl">Galeria</h2>
+      <ul className="revelar mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-6">
         {fotos.map((f) => (
-          <li key={f.id} className="overflow-hidden rounded-[16px] border border-linha bg-white">
+          <li key={f.id} className="realce overflow-hidden rounded-[16px] border border-linha bg-white">
             <img
               src={base.getPublicUrl(f.caminho).data.publicUrl}
               alt={f.legenda ?? ""}

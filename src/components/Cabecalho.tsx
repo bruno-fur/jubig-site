@@ -12,7 +12,7 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-linha bg-creme/90 backdrop-blur print:hidden">
-      <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" aria-label="JUBIG — início" className="shrink-0">
           {/* 1103x551 no arquivo; a altura fixa e a largura automática mantêm a proporção. */}
           <img
@@ -20,7 +20,7 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
             alt="JUBIG — Juventude Batista do Iguaçu"
             width={220}
             height={110}
-            className="h-9 w-auto sm:h-10"
+            className="h-9 w-auto sm:h-10 lg:h-12"
           />
         </Link>
 
@@ -29,14 +29,14 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
             <>
               <LinkNav
                 href="/minhas-inscricoes"
-                className="rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
+                className="link-menu rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
               >
                 Minhas inscrições
               </LinkNav>
               {papel && (
                 <LinkNav
                   href="/diretoria"
-                  className="relative rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
+                  className="link-menu rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta"
                 >
                   Diretoria
                   {pendencias && pendencias.comprovantes > 0 && (

@@ -7,7 +7,7 @@ export async function Rodape() {
 
   return (
     <footer className="mt-16 border-t border-linha bg-tinta text-creme print:hidden">
-      <div className="mx-auto grid max-w-5xl gap-8 px-4 py-10 sm:grid-cols-3">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:px-8 lg:py-14">
         <div>
           {/* Versão branca: o rodapé é escuro e a laranja some no fundo tinta. */}
           <img

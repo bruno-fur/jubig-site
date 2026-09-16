@@ -15,7 +15,9 @@
     "evento": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/evento.mts",
     "vercel:env": "node scripts/vercel-env.mjs",
     "testar:cadastro": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/testar-cadastro.mts",
-    "semear": "node --env-file-if-exists=.env.local scripts/semear.mjs"
+    "semear": "node --env-file-if-exists=.env.local scripts/semear.mjs",
+    "semear:igrejas": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/semear-igrejas.mts",
+    "localizar:igrejas": "node --experimental-strip-types --no-warnings --env-file-if-exists=.env.local scripts/localizar-igrejas.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
