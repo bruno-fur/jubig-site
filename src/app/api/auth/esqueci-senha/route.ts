@@ -3,6 +3,7 @@ import { z } from "zod";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { Emails } from "@/lib/email";
 import { urlDoSite } from "@/lib/site";
+import { estourouOTeto } from "@/lib/limites";
 
 /** Um pedido por minuto por conta. */
 const ESPERA_SEGUNDOS = 60;
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
   if (ultimo && (Date.now() - new Date(ultimo.criado_em).getTime()) / 1000 < ESPERA_SEGUNDOS) {
     return resposta;
   }
+
+  // Teto por hora: varrer uma lista de e-mails não queima a cota do Gmail do dia.
+  if (await estourouOTeto(admin, "redefinicoes_senha")) return resposta;
 
   const { data: novo, error: erroToken } = await admin
     .from("redefinicoes_senha")

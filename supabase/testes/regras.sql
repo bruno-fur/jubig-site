@@ -1165,4 +1165,32 @@ end $$;
 
 set role postgres;
 
+-- ============================================================
+-- Painel é da diretoria: usuário comum não lê números do evento
+-- ============================================================
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+
+do $$
+begin
+  if exists (select 1 from painel_evento) then
+    raise exception 'FALHOU — usuario comum enxerga o painel do evento';
+  end if;
+  if exists (select 1 from painel_igrejas) then
+    raise exception 'FALHOU — usuario comum enxerga as igrejas do painel';
+  end if;
+  raise notice 'ok    painel do evento fechado para usuario comum';
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+begin
+  if not exists (select 1 from painel_evento) then
+    raise exception 'FALHOU — diretoria deveria ver o painel do evento';
+  end if;
+  raise notice 'ok    diretoria ve o painel do evento';
+end $$;
+
+set role postgres;
+
 select 'TODOS OS TESTES PASSARAM' as resultado;

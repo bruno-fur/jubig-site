@@ -48,7 +48,7 @@ export function emailInscricaoRecebida(d: DadosInscricao) {
       estado: "joia",
       titulo: "Inscrição registrada!",
       corpo:
-        texto(`Oi ${d.nome.split(" ")[0]}, anotamos sua inscrição. Este é o seu comprovante:`) +
+        texto(`Oi ${escapar(d.nome.split(" ")[0])}, anotamos sua inscrição. Este é o seu comprovante:`) +
         caixaDados(itens) +
         texto(
           `${selo("Aguardando pagamento", CORES.laranjaEscuro, "#FBE6D5")}`,
@@ -70,7 +70,7 @@ export function emailComprovanteRecebido(d: DadosInscricao) {
       titulo: "Comprovante recebido",
       corpo:
         texto(
-          `Chegou aqui, ${d.nome.split(" ")[0]}. A diretoria vai conferir seu pagamento e confirmar a vaga.`,
+          `Chegou aqui, ${escapar(d.nome.split(" ")[0])}. A diretoria vai conferir seu pagamento e confirmar a vaga.`,
         ) +
         caixaDados([
           ["Código", d.codigo],
@@ -93,7 +93,7 @@ export function emailInscricaoAprovada(d: DadosInscricao) {
       estado: "joia",
       titulo: "Vaga confirmada!",
       corpo:
-        texto(`Pagamento conferido, ${d.nome.split(" ")[0]}. Sua vaga está garantida.`) +
+        texto(`Pagamento conferido, ${escapar(d.nome.split(" ")[0])}. Sua vaga está garantida.`) +
         caixaDados([
           ["Código", d.codigo],
           ["Evento", d.evento],
@@ -121,7 +121,7 @@ export function emailComprovanteRecusado(d: DadosInscricao, motivo: string) {
       titulo: "Não conseguimos validar seu pagamento",
       corpo:
         texto(
-          `${d.nome.split(" ")[0]}, a diretoria olhou seu comprovante e não deu para confirmar.`,
+          `${escapar(d.nome.split(" ")[0])}, a diretoria olhou seu comprovante e não deu para confirmar.`,
         ) +
         caixaDados([
           ["Código", d.codigo],
@@ -177,11 +177,11 @@ export function emailAviso(nome: string, a: DadosAviso) {
     subject: `${a.evento}: ${a.titulo}`,
     html: layout({
       // O layout interpola sem escapar; título vem digitado do painel.
-      preheader: escapar(a.titulo),
+      preheader: a.titulo,
       estado: "heh",
-      titulo: escapar(a.titulo),
+      titulo: a.titulo,
       corpo:
-        texto(primeiro ? `Oi ${primeiro}, novidade sobre o <strong>${escapar(a.evento)}</strong>:` : `Novidade sobre o <strong>${escapar(a.evento)}</strong>:`) +
+        texto(primeiro ? `Oi ${escapar(primeiro)}, novidade sobre o <strong>${escapar(a.evento)}</strong>:` : `Novidade sobre o <strong>${escapar(a.evento)}</strong>:`) +
         texto(...paragrafos),
       botao: { texto: "Ver o evento", url: `${urlDoSite()}/${a.slug}` },
       rodapeWhatsApp: `Olá! Vi o aviso sobre o ${a.evento}.`,
@@ -272,7 +272,7 @@ export function emailInscricaoCancelada(nome: string, d: DadosCancelamento) {
   return {
     subject: `Inscrição ${d.codigo} cancelada`,
     html: layout({
-      preheader: `A diretoria cancelou sua inscrição no ${escapar(d.evento)}.`,
+      preheader: `A diretoria cancelou sua inscrição no ${d.evento}.`,
       estado: "choro",
       titulo: "Sua inscrição foi cancelada",
       corpo:

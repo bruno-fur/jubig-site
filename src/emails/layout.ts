@@ -20,6 +20,25 @@ export const CORES = {
   ruim: "#C0392B",
 };
 
+/**
+ * Escapa texto que entra no HTML do e-mail.
+ *
+ * Nome, igreja e motivo de recusa são digitados por gente de fora. Sem isto,
+ * um nome com "<" quebra o layout no cliente de e-mail, e um texto com tag
+ * vira conteúdo que ninguém da JUBIG escreveu dentro de uma mensagem que
+ * chega assinada como JUBIG.
+ *
+ * `corpo` continua entrando cru de propósito: ele é montado por texto() e
+ * caixaDados(), que já escapam os pedaços variáveis.
+ */
+export function escaparHtml(t: string) {
+  return String(t ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function linkWhatsApp(texto: string) {
   return `https://wa.me/${WHATSAPP_PADRAO}?text=${encodeURIComponent(texto)}`;
 }
@@ -45,10 +64,10 @@ export function layout({ preheader, estado, titulo, corpo, botao, rodapeWhatsApp
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>${titulo}</title>
+<title>${escaparHtml(titulo)}</title>
 </head>
 <body style="margin:0;padding:0;background:${CORES.creme};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-<div style="display:none;font-size:1px;color:${CORES.creme};max-height:0;overflow:hidden;">${preheader}</div>
+<div style="display:none;font-size:1px;color:${CORES.creme};max-height:0;overflow:hidden;">${escaparHtml(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CORES.creme};padding:24px 12px;">
 <tr><td align="center">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid ${CORES.linha};">
@@ -73,19 +92,19 @@ export function layout({ preheader, estado, titulo, corpo, botao, rodapeWhatsApp
     </td></tr>
 
     <tr><td style="padding:16px 28px 0;">
-      <h1 style="margin:0 0 12px;font-size:23px;line-height:1.2;color:${CORES.tinta};font-weight:800;">${titulo}</h1>
+      <h1 style="margin:0 0 12px;font-size:23px;line-height:1.2;color:${CORES.tinta};font-weight:800;">${escaparHtml(titulo)}</h1>
       <div style="font-size:16px;line-height:1.65;color:#3E2A1E;">${corpo}</div>
     </td></tr>
 
     ${botao ? `<tr><td align="center" style="padding:26px 28px 0;">
-      <a href="${botao.url}" style="display:inline-block;background:${CORES.laranja};color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:15px 30px;border-radius:10px;">${botao.texto}</a>
+      <a href="${escaparHtml(botao.url)}" style="display:inline-block;background:${CORES.laranja};color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:15px 30px;border-radius:10px;">${escaparHtml(botao.texto)}</a>
     </td></tr>` : ""}
 
     <tr><td style="padding:28px 28px 0;">
       <table role="presentation" width="100%" style="background:${CORES.areia};border-radius:12px;">
         <tr><td style="padding:16px 18px;font-size:14.5px;line-height:1.6;color:${CORES.laranjaEscuro};">
           Ficou com dúvida? Fala com a diretoria no WhatsApp:
-          <a href="${wa}" style="color:${CORES.laranjaEscuro};font-weight:600;">abrir conversa</a>.
+          <a href="${escaparHtml(wa)}" style="color:${CORES.laranjaEscuro};font-weight:600;">abrir conversa</a>.
         </td></tr>
       </table>
     </td></tr>
@@ -111,13 +130,13 @@ export function caixaDados(itens: [string, string][]) {
   const linhas = itens
     .map(
       ([k, v], i) =>
-        `<tr><td style="padding:9px 0;font-size:14.5px;color:${CORES.apagado};${i ? `border-top:1px solid ${CORES.linha};` : ""}">${k}</td>
-         <td align="right" style="padding:9px 0;font-size:14.5px;font-weight:600;color:${CORES.tinta};${i ? `border-top:1px solid ${CORES.linha};` : ""}">${v}</td></tr>`
+        `<tr><td style="padding:9px 0;font-size:14.5px;color:${CORES.apagado};${i ? `border-top:1px solid ${CORES.linha};` : ""}">${escaparHtml(k)}</td>
+         <td align="right" style="padding:9px 0;font-size:14.5px;font-weight:600;color:${CORES.tinta};${i ? `border-top:1px solid ${CORES.linha};` : ""}">${escaparHtml(v)}</td></tr>`
     )
     .join("");
   return `<table role="presentation" width="100%" style="margin:18px 0;border:1px solid ${CORES.linha};border-radius:12px;padding:6px 16px;">${linhas}</table>`;
 }
 
 export function selo(texto: string, cor: string, fundo: string) {
-  return `<span style="display:inline-block;background:${fundo};color:${cor};font-size:13px;font-weight:600;padding:5px 13px;border-radius:99px;">${texto}</span>`;
+  return `<span style="display:inline-block;background:${fundo};color:${cor};font-size:13px;font-weight:600;padding:5px 13px;border-radius:99px;">${escaparHtml(texto)}</span>`;
 }

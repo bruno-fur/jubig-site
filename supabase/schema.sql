@@ -1026,6 +1026,9 @@ with (security_invoker = false) as
   from eventos e
   left join inscricoes i on i.evento_id = e.id
   left join inscritos ins on ins.inscricao_id = i.id
+  -- A view roda como dona, então precisa filtrar sozinha: sem isto, qualquer
+  -- pessoa logada lia o faturamento do evento pela API.
+  where eh_diretoria()
   group by e.id;
 
 revoke all on painel_evento from anon, authenticated;
@@ -1038,7 +1041,7 @@ with (security_invoker = false) as
   select i.evento_id, ins.igreja, count(*)::int as pessoas
     from inscritos ins
     join inscricoes i on i.id = ins.inscricao_id
-   where i.status <> 'cancelada'
+   where i.status <> 'cancelada' and eh_diretoria()
    group by i.evento_id, ins.igreja;
 
 revoke all on painel_igrejas from anon, authenticated;

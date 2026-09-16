@@ -2,6 +2,7 @@ import "server-only";
 import { criarClienteAdmin } from "@/lib/supabase/admin";
 import { Emails } from "@/lib/email";
 import { urlDoSite } from "@/lib/site";
+import { estourouOTeto } from "@/lib/limites";
 
 /** Um e-mail por minuto por conta. */
 const ESPERA_SEGUNDOS = 60;
@@ -45,6 +46,9 @@ export async function enviarConfirmacao(userId: string): Promise<ResultadoConfir
     if (segundos < ESPERA_SEGUNDOS)
       return { status: "muitas_tentativas", esperar: Math.ceil(ESPERA_SEGUNDOS - segundos) };
   }
+
+  // Teto por hora: um ataque em lista de e-mails não queima a cota do Gmail.
+  if (await estourouOTeto(admin, "confirmacoes_email")) return { status: "falha" };
 
   const { data: novo, error } = await admin
     .from("confirmacoes_email")
