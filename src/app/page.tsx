@@ -27,7 +27,7 @@ export default async function Home() {
       <Agenda agenda={agenda} hoje={hoje} />
       <Onde igrejas={igrejas} />
       <Instagram usuario={instagram.usuario ?? config.instagram} postagens={instagram.postagens} />
-      <Galeria limite={8} verTodas />
+      <Galeria limite={6} verTodas />
       <Contato whatsapp={config.whatsapp} instagram={config.instagram} />
     </>
   );

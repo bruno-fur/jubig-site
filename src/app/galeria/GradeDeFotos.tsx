@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type Foto = { id: string; legenda: string | null; url: string };
+import type { Foto } from "@/lib/galeria";
+export type { Foto };
 
 /**
  * Grade de fotos com abertura em tela cheia.

@@ -25,6 +25,14 @@ export async function Cabecalho({ sessao }: { sessao: Sessao | null }) {
         </Link>
 
         <nav className="ml-auto flex items-center gap-1 text-sm">
+          {/* Aba pública: aparece logada ou não. */}
+          <LinkNav
+            href="/galeria"
+            className="link-menu hidden rounded-[10px] px-3 py-2 font-medium text-apagado hover:bg-areia hover:text-tinta sm:inline-flex"
+          >
+            Galeria
+          </LinkNav>
+
           {sessao ? (
             <>
               <LinkNav

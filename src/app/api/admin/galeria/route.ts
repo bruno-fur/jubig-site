@@ -39,6 +39,8 @@ export async function POST(req: Request) {
   const arquivo = form.get("arquivo");
   const legenda = String(form.get("legenda") ?? "").trim().slice(0, 200) || null;
   const eventoId = String(form.get("eventoId") ?? "").trim() || null;
+  const album = String(form.get("album") ?? "").trim().slice(0, 120) || null;
+  const albumId = String(form.get("albumId") ?? "").trim() || null;
   const ordem = Number(form.get("ordem") ?? 0);
 
   if (!(arquivo instanceof File)) return NextResponse.json({ erro: "sem_arquivo" }, { status: 400 });
@@ -47,9 +49,11 @@ export async function POST(req: Request) {
   if (arquivo.size > MAX) return NextResponse.json({ erro: "arquivo_grande" }, { status: 400 });
   if (eventoId && !z.uuid().safeParse(eventoId).success)
     return NextResponse.json({ erro: "evento_invalido" }, { status: 400 });
+  if (albumId && !z.uuid().safeParse(albumId).success)
+    return NextResponse.json({ erro: "album_invalido" }, { status: 400 });
 
   const supabase = await createClient();
-  const caminho = `${eventoId ?? "geral"}/${crypto.randomUUID()}.${extensao}`;
+  const caminho = `${albumId ? `albuns/${albumId}` : (eventoId ?? "geral")}/${crypto.randomUUID()}.${extensao}`;
 
   const { error: erroUpload } = await supabase.storage
     .from("fotos")
@@ -61,7 +65,14 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("galeria")
-    .insert({ caminho, legenda, evento_id: eventoId, ordem: Number.isFinite(ordem) ? ordem : 0 })
+    .insert({
+      caminho,
+      legenda,
+      album,
+      album_id: albumId,
+      evento_id: eventoId,
+      ordem: Number.isFinite(ordem) ? ordem : 0,
+    })
     .select("id")
     .single();
 
@@ -84,6 +95,13 @@ const Ajuste = z.object({
     .nullish()
     .transform((v) => (v ? v : null)),
   ordem: z.number().int().min(0).max(9999).optional(),
+  albumId: z.uuid().nullish(),
+  album: z
+    .string()
+    .trim()
+    .max(120)
+    .nullish()
+    .transform((v) => (v ? v : null)),
   eventoId: z.uuid().nullish(),
 });
 
@@ -93,13 +111,15 @@ export async function PATCH(req: Request) {
 
   const corpo = Ajuste.safeParse(await req.json().catch(() => null));
   if (!corpo.success) return NextResponse.json({ erro: "pedido_invalido" }, { status: 400 });
-  const { id, legenda, ordem, eventoId } = corpo.data;
+  const { id, legenda, ordem, eventoId, album, albumId } = corpo.data;
 
   const supabase = await createClient();
   const { error } = await supabase
     .from("galeria")
     .update({
       legenda,
+      ...(album !== undefined && { album }),
+      ...(albumId !== undefined && { album_id: albumId }),
       ...(ordem !== undefined && { ordem }),
       ...(eventoId !== undefined && { evento_id: eventoId }),
     })

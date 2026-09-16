@@ -1548,3 +1548,48 @@ end $fn$;
 
 revoke all on function trocar_escolhas(uuid, jsonb, boolean) from public, anon;
 grant execute on function trocar_escolhas(uuid, jsonb, boolean) to authenticated;
+
+-- ============================================================
+-- Álbum da galeria
+--
+-- A foto pode pertencer a um evento (evento_id) ou só a um álbum solto, como
+-- o Congresso de 2023, que aconteceu antes do site existir e não tem evento
+-- cadastrado. Sem esta coluna, o nome do álbum ficava grudado na legenda.
+-- ============================================================
+alter table galeria add column if not exists album text;
+
+-- ============================================================
+-- Álbuns de fotos
+--
+-- A galeria do site guarda uma PRÉVIA, não o acervo: cinco ou seis fotos por
+-- álbum, e o link para o acervo inteiro (Drive, Google Fotos, Instagram).
+-- Hospedar mil fotos de evento estouraria o 1 GB do plano gratuito em um
+-- único congresso, e o material bruto já vive no Drive de quem fotografou.
+--
+-- O álbum pode estar ligado a um evento do site (evento_id) ou ser solto,
+-- como o Congresso de 2023, que aconteceu antes do site existir.
+-- ============================================================
+create table if not exists albuns (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null,
+  link text,                           -- acervo completo, fora do site
+  data date,
+  evento_id uuid references eventos on delete set null,
+  ordem int not null default 0,
+  criado_em timestamptz default now()
+);
+create index if not exists albuns_ordem on albuns (ordem, criado_em desc);
+
+alter table albuns enable row level security;
+
+drop policy if exists "albuns publicos" on albuns;
+create policy "albuns publicos" on albuns for select using (true);
+
+drop policy if exists "diretoria edita albuns" on albuns;
+create policy "diretoria edita albuns" on albuns
+  for all using (eh_diretoria()) with check (eh_diretoria());
+
+-- A foto passa a apontar para o álbum. `album` em texto continua aí para o
+-- que foi cadastrado antes, e o site lê os dois.
+alter table galeria add column if not exists album_id uuid references albuns on delete set null;
+create index if not exists galeria_album on galeria (album_id, ordem);
