@@ -1273,6 +1273,32 @@ begin
   raise notice 'ok    equipe de outro evento recusada';
 end $$;
 
+-- Equilibrar: tudo na Azul (feito acima), a função espalha de novo.
+set role authenticated;
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare v_evento uuid := (select id from eventos where slug = 'jubigday-2026'); v_n int; v_dif int;
+begin
+  perform mover_para_equipe(id, (select id from equipes where evento_id = v_evento and nome = 'Azul'))
+     from inscritos where evento_id = v_evento and ativo;
+  v_n := equilibrar_equipes(v_evento);
+  select max(c) - min(c) into v_dif from (
+    select (select count(*) from inscritos i where i.equipe_id = e.id and i.ativo) c
+      from equipes e where e.evento_id = v_evento) x;
+  if v_dif > 1 then raise exception 'FALHOU — equilibrar deixou diferenca de %', v_dif; end if;
+  if v_n = 0 then raise exception 'FALHOU — equilibrar nao moveu ninguem'; end if;
+  raise notice 'ok    equilibrar espalha as equipes (% movidos)', v_n;
+end $$;
+
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  if equilibrar_equipes((select id from eventos where slug = 'jubigday-2026')) <> 0 then
+    raise exception 'FALHOU — usuario comum equilibrou';
+  end if;
+  raise notice 'ok    usuario comum nao equilibra';
+end $$;
+
 -- Placar é público.
 set role anon;
 do $$

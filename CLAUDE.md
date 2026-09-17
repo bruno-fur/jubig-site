@@ -229,17 +229,22 @@ garante que sempre sobre ao menos um admin.
       limpa a nota/parceiros que deixaram de valer
 
 ### 10. Pulseiras (equipes por cor)
-- [x] `equipes` por evento (nome, cor) e `inscritos.equipe_id`. JubigDay
-      sorteia **na chegada**: `registrar_checkin` chama `sortear_equipe`, que
-      põe a pessoa na equipe com menos gente. Congresso usa na gincana
+- [x] `equipes` por evento (nome e cor da pulseira comprada) e
+      `inscritos.equipe_id`. **Sorteio geral**: todos os confirmados divididos
+      por igual (80 em 4 → 20 cada), não por modalidade. Quem confirma depois
+      recebe a cor na Validação (`registrar_checkin` → `sortear_equipe`,
+      sempre a equipe com menos gente)
+- [x] Troca manual livre; com diferença maior que 1 a tela avisa e oferece
+      `equilibrar_equipes` (move primeiro quem ainda não chegou)
 - [x] `equipe_id` protegido pelo mesmo trigger do check-in — sem isso o dono
       escolhia a própria cor. Troca manual só por `mover_para_equipe`
-- [x] Pontos são lançamentos (`pontos_equipe`), não um total: erro de
-      digitação se apaga sem perder o resto. View `placar` pública; a página
-      do evento mostra depois do primeiro ponto
-- [x] Diretoria > Pulseiras e placar: placar, lançar pontos, quem está em
-      cada equipe (troca por seleção), sortear em lote, cores
-- [x] Visão geral e Pulseiras mostram um evento por vez (`?evento=slug`)
+- [x] Pontos são lançamentos (`pontos_equipe`), negativos permitidos: erro
+      se apaga sem perder o resto. View `placar` pública, mas a página do
+      evento só mostra **depois que o evento começa**
+- [x] Fica **dentro do evento** (Diretoria > Eventos > Pulseiras), para a
+      diretoria toda. Eventos aparece para membro; criar/editar segue só admin
+- [x] Visão geral mostra um evento por vez (`?evento=slug`)
+- [ ] Congresso: gincana por equipes ainda a alinhar com a diretoria
 
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.

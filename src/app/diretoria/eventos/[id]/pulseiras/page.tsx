@@ -1,39 +1,29 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { exigirDiretoria } from "@/lib/sessao";
 import { createClient } from "@/lib/supabase/server";
-import { ROTULO_TIPO, type Equipe, type Evento, type LinhaPlacar, type PontoEquipe } from "@/tipos/db";
+import type { Equipe, Evento, LinhaPlacar, PontoEquipe } from "@/tipos/db";
+import { CabecalhoEvento } from "../../CabecalhoEvento";
 import { Pulseiras, type PessoaEquipe } from "./Pulseiras";
-import { SeletorEvento, escolherEvento } from "@/components/SeletorEvento";
 
 export const metadata: Metadata = { title: "Pulseiras", robots: { index: false } };
+export const dynamic = "force-dynamic";
 
 /**
- * Equipes por cor: o JubigDay sorteia na chegada, o Congresso usa na gincana.
+ * Pulseiras de um evento: equipes por cor, sorteio e placar.
  *
- * Só eventos com inscrição — no tour não há lista de gente para dividir.
+ * Diretoria toda, não só admin — no dia, quem está na quadra lança ponto e
+ * remaneja gente.
  */
-export default async function PaginaPulseiras({
-  searchParams,
-}: {
-  searchParams: Promise<{ evento?: string }>;
-}) {
-  await exigirDiretoria();
-  const { evento: slug } = await searchParams;
+export default async function PaginaPulseiras({ params }: { params: Promise<{ id: string }> }) {
+  const sessao = await exigirDiretoria();
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+
   const supabase = await createClient();
-
-  const { data: lista } = await supabase
-    .from("eventos")
-    .select("*")
-    .eq("tem_inscricao", true)
-    .order("data_evento");
-  const eventos = (lista ?? []) as Evento[];
-
-  // Sem escolha: o próximo JubigDay que ainda não passou.
-  const evento = escolherEvento(eventos, slug, (e) => e.tipo === "jubigday");
-
-  if (!evento) {
-    return <p className="text-apagado">Nenhum evento com inscrição cadastrado ainda.</p>;
-  }
+  const { data } = await supabase.from("eventos").select("*").eq("id", id).maybeSingle();
+  const evento = data as Evento | null;
+  if (!evento || !evento.tem_inscricao) notFound();
 
   const [equipes, placar, pontos, pessoas] = await Promise.all([
     supabase.from("equipes").select("*").eq("evento_id", evento.id).order("ordem"),
@@ -53,19 +43,13 @@ export default async function PaginaPulseiras({
       .order("nome"),
   ]);
 
-  const seletor = (
-    <SeletorEvento
-      base="/diretoria/pulseiras"
-      atual={evento.slug}
-      eventos={eventos.map((e) => ({ slug: e.slug, nome: e.nome, detalhe: ROTULO_TIPO[e.tipo] }))}
-    />
-  );
+  const cabecalho = <CabecalhoEvento evento={evento} atual="pulseiras" admin={sessao.papel === "admin"} />;
 
   // Tabela nova: até o schema rodar, a tela explica em vez de quebrar.
   if (equipes.error) {
     return (
       <>
-        {seletor}
+        {cabecalho}
         <p className="cartao p-5 text-apagado">
           As pulseiras precisam do <code>supabase/schema.sql</code> mais recente. Rode o arquivo no SQL Editor do
           Supabase e recarregue esta página.
@@ -76,9 +60,8 @@ export default async function PaginaPulseiras({
 
   return (
     <>
-      {seletor}
+      {cabecalho}
       <Pulseiras
-        key={evento.id}
         evento={{ id: evento.id, nome: evento.nome, tipo: evento.tipo }}
         equipes={(equipes.data ?? []) as Equipe[]}
         placar={(placar.data ?? []) as LinhaPlacar[]}

@@ -3,11 +3,11 @@ import type { LinhaPlacar } from "@/tipos/db";
 
 /**
  * Placar das equipes na página do evento — no dia, a galera acompanha pelo
- * celular. Só aparece depois do primeiro ponto: antes disso, quatro zeros
- * não dizem nada.
+ * celular. Quem chama decide se o evento já começou; antes disso a página
+ * não mostra placar nenhum.
  */
 export function PlacarPublico({ linhas }: { linhas: LinhaPlacar[] }) {
-  if (!linhas.some((l) => l.pontos !== 0)) return null;
+  if (linhas.length === 0) return null;
   const { ordem, lider } = ordenarPlacar(linhas);
 
   return (

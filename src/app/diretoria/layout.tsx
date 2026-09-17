@@ -24,6 +24,9 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
       { href: "/diretoria", titulo: "Visão geral", grupo: "dia" },
       { href: "/diretoria/inscricoes", titulo: "Inscrições", grupo: "dia" },
       { href: "/diretoria/pagamentos", titulo: "Pagamentos", grupo: "dia" },
+      // Eventos fica no dia a dia: dentro de cada um, a diretoria toda cuida das
+      // pulseiras. Criar e editar o evento continua só do admin.
+      { href: "/diretoria/eventos", titulo: "Eventos", grupo: "dia" },
       { href: "/diretoria/galeria", titulo: "Galeria", grupo: "dia" },
       {
         href: "/diretoria/validacao",
@@ -31,8 +34,6 @@ export default async function LayoutDiretoria({ children }: { children: React.Re
         grupo: "dia",
         tambem: ["/diretoria/ingresso", "/diretoria/portaria"],
       },
-      { href: "/diretoria/pulseiras", titulo: "Pulseiras e placar", grupo: "dia" },
-      { href: "/diretoria/eventos", titulo: "Eventos", grupo: "admin" },
       { href: "/diretoria/modalidades", titulo: "Modalidades", grupo: "admin" },
       { href: "/diretoria/avisos", titulo: "Avisos", grupo: "admin" },
       { href: "/diretoria/igrejas", titulo: "Igrejas", grupo: "admin" },

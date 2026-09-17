@@ -25,6 +25,7 @@ const Pedido = z.discriminatedUnion("acao", [
   }),
   z.object({ acao: z.literal("apagar_ponto"), id: z.uuid() }),
   z.object({ acao: z.literal("mover"), inscritoId: z.uuid(), equipeId: z.uuid().nullable() }),
+  z.object({ acao: z.literal("equilibrar"), eventoId: z.uuid() }),
   z.object({
     acao: z.literal("sortear"),
     eventoId: z.uuid(),
@@ -114,6 +115,11 @@ export async function POST(req: Request) {
       return r === "ok"
         ? NextResponse.json({ status: "ok" })
         : NextResponse.json({ erro: r }, { status: STATUS[r] ?? 400 });
+    }
+
+    case "equilibrar": {
+      const { data, error } = await supabase.rpc("equilibrar_equipes", { p_evento: p.eventoId });
+      return error ? falhou("equilibrar", error.message) : NextResponse.json({ movidos: Number(data) });
     }
 
     case "sortear": {

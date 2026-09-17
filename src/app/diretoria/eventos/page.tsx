@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { exigirAdmin } from "@/lib/sessao";
+import { exigirDiretoria } from "@/lib/sessao";
 import { createClient } from "@/lib/supabase/server";
 import { situacaoInscricoes, type SituacaoInscricoes } from "@/lib/eventos";
 import { dataHoraBrasilia } from "@/components/ChamadaEvento";
@@ -33,9 +33,15 @@ function rotulo(e: Evento, s: SituacaoInscricoes) {
   }
 }
 
-/** Todos os eventos, publicados ou não. Criar e editar sem abrir o SQL Editor. */
+/**
+ * Todos os eventos, publicados ou não.
+ *
+ * A diretoria toda entra aqui para chegar às pulseiras de cada evento; criar
+ * e editar continua só do admin (a página de edição tem `exigirAdmin()`).
+ */
 export default async function Eventos() {
-  await exigirAdmin();
+  const sessao = await exigirDiretoria();
+  const admin = sessao.papel === "admin";
   const supabase = await createClient();
 
   const [{ data: eventos }, { data: painel }] = await Promise.all([
@@ -50,11 +56,15 @@ export default async function Eventos() {
     <>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-apagado">
-          Crie o evento como rascunho, confira tudo e publique quando o PIX estiver testado.
+          {admin
+            ? "Crie o evento como rascunho, confira tudo e publique quando o PIX estiver testado."
+            : "Abra o evento para cuidar das pulseiras e do placar."}
         </p>
-        <Link href="/diretoria/eventos/novo" className="botao-primario">
-          + Novo evento
-        </Link>
+        {admin && (
+          <Link href="/diretoria/eventos/novo" className="botao-primario">
+            + Novo evento
+          </Link>
+        )}
       </div>
 
       <ul className="space-y-3">
@@ -95,9 +105,22 @@ export default async function Eventos() {
                     Ver no site
                   </Link>
                 )}
-                <Link href={`/diretoria/eventos/${e.id}`} className="font-semibold text-laranja-escuro hover:underline">
-                  Editar
-                </Link>
+                {e.tem_inscricao && (
+                  <Link
+                    href={`/diretoria/eventos/${e.id}/pulseiras`}
+                    className="font-semibold text-tinta hover:underline"
+                  >
+                    Pulseiras
+                  </Link>
+                )}
+                {admin && (
+                  <Link
+                    href={`/diretoria/eventos/${e.id}`}
+                    className="font-semibold text-laranja-escuro hover:underline"
+                  >
+                    Editar
+                  </Link>
+                )}
               </div>
             </li>
           );
@@ -107,7 +130,9 @@ export default async function Eventos() {
       {lista.length === 0 && (
         <div className="cartao flex items-center gap-4 p-6">
           <img src="/juca/heh.webp" alt="" className="w-16" />
-          <p className="text-apagado">Nenhum evento ainda. Comece pelo botão acima.</p>
+          <p className="text-apagado">
+            {admin ? "Nenhum evento ainda. Comece pelo botão acima." : "Nenhum evento cadastrado ainda."}
+          </p>
         </div>
       )}
     </>

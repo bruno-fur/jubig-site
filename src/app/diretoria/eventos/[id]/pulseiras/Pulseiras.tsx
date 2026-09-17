@@ -37,9 +37,8 @@ const hora = (iso: string) =>
 /**
  * Pulseiras: equipes por cor, placar e quem está em cada uma.
  *
- * Ordem da tela = ordem do dia: placar em cima (é o que mais se olha à
- * tarde), pessoas no meio (troca de equipe na chegada), configuração no fim
- * (mexe-se uma vez, antes do evento).
+ * Ordem da tela = ordem do trabalho: sorteio e quem está em cada equipe em
+ * cima, placar no meio (é o que se usa durante o dia), nome e cor no fim.
  */
 export function Pulseiras({
   evento,
@@ -64,7 +63,7 @@ export function Pulseiras({
         <h2 className="titulo text-xl">Nenhuma equipe em {evento.nome}</h2>
         <p className="text-apagado">
           {evento.tipo === "jubigday"
-            ? "No JubigDay cada pessoa recebe a pulseira de uma equipe ao chegar. Com as equipes criadas, a Validação sorteia a cor na hora de liberar a entrada — sempre para a equipe com menos gente."
+            ? "Crie as equipes com o nome e a cor das pulseiras que vocês compraram. Depois, um sorteio divide todos os confirmados por igual entre elas."
             : "Crie as equipes para a gincana e sorteie quem já está inscrito."}
         </p>
         <div className="flex flex-wrap items-center gap-3">
@@ -92,7 +91,6 @@ export function Pulseiras({
   return (
     <div className="space-y-8">
       <Recado erro={acao.erro} sucesso={acao.feito} aoFechar={acao.limpar} />
-      <Placar placar={placar} pontos={pontos} porId={porId} ocupado={acao.ocupado} enviar={enviar} />
       <Pessoas
         eventoId={evento.id}
         pessoas={pessoas}
@@ -101,6 +99,7 @@ export function Pulseiras({
         ocupado={acao.ocupado}
         enviar={enviar}
       />
+      <Placar placar={placar} pontos={pontos} porId={porId} ocupado={acao.ocupado} enviar={enviar} />
       <Configurar eventoId={evento.id} equipes={equipes} placar={placar} ocupado={acao.ocupado} enviar={enviar} />
     </div>
   );
@@ -277,6 +276,26 @@ function Placar({
 
 // ---------------------------------------------------------------- Pessoas
 
+/**
+ * Quantas pessoas precisam trocar para as equipes ficarem iguais (diferença
+ * de no máximo 1). As maiores ficam com a sobra da divisão — é o mínimo de
+ * trocas, o mesmo que `equilibrar_equipes` faz no banco.
+ */
+function trocasParaEquilibrar(contagens: number[]) {
+  const total = contagens.reduce((a, b) => a + b, 0);
+  const k = contagens.length;
+  if (k === 0) return 0;
+  const base = Math.floor(total / k);
+  let sobra = total % k;
+  return [...contagens]
+    .sort((a, b) => b - a)
+    .reduce((soma, c) => {
+      const alvo = base + (sobra > 0 ? 1 : 0);
+      if (sobra > 0) sobra--;
+      return soma + Math.max(0, c - alvo);
+    }, 0);
+}
+
 function Pessoas({
   eventoId,
   pessoas,
@@ -297,8 +316,14 @@ function Pessoas({
   const [soPresentes, setSoPresentes] = useState(false);
   const [refazendo, setRefazendo] = useState(false);
 
-  const semEquipe = pessoas.filter((p) => !p.equipe_id && (!soPresentes || p.checkin_em)).length;
+  const semEquipe = pessoas.filter((p) => !p.equipe_id).length;
+  const comEquipe = pessoas.length - semEquipe;
   const presentes = pessoas.filter((p) => p.checkin_em).length;
+  const porEquipe = equipes.map((e) => ({ ...e, pessoas: pessoas.filter((p) => p.equipe_id === e.id).length }));
+  const contagens = porEquipe.map((e) => e.pessoas);
+  const diferenca = contagens.length ? Math.max(...contagens) - Math.min(...contagens) : 0;
+  const trocas = trocasParaEquilibrar(contagens);
+  const cadaUma = equipes.length ? Math.floor(pessoas.length / equipes.length) : 0;
 
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const visiveis = pessoas.filter(
@@ -308,11 +333,13 @@ function Pessoas({
       (!termo || `${p.nome} ${p.igreja}`.toLocaleLowerCase("pt-BR").includes(termo))
   );
 
+  const sortear = (refazer: boolean) => enviar({ acao: "sortear", eventoId, soPresentes: false, refazer });
+
   return (
     <section aria-labelledby="titulo-pessoas" className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="titulo-pessoas" className="titulo text-2xl">
-          Quem está em cada equipe
+          Sorteio das equipes
         </h2>
         <p className="text-sm text-apagado">
           {pessoas.length} confirmados · {presentes} já chegaram
@@ -320,55 +347,103 @@ function Pessoas({
       </div>
 
       <div className="cartao space-y-3 p-4">
-        <p className="text-sm text-apagado">
-          Na Validação a cor sai sozinha ao liberar a entrada. Use o sorteio abaixo para quem entrou sem sinal ou
-          para dividir antes.
-        </p>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={soPresentes} onChange={(e) => setSoPresentes(e.target.checked)} />
-          Só quem já chegou
-        </label>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={ocupado || semEquipe === 0}
-            onClick={() => enviar({ acao: "sortear", eventoId, soPresentes, refazer: false })}
-            className="botao-primario"
-          >
-            {ocupado && <Girando />}
-            Sortear {semEquipe} sem equipe
-          </button>
-          <button type="button" disabled={ocupado} onClick={() => setRefazendo(true)} className="botao-secundario">
-            Refazer o sorteio
-          </button>
-        </div>
-        {refazendo && (
-          <div role="alert" className="rounded-[10px] bg-ruim/10 p-3 text-sm text-ruim">
-            <p className="font-semibold">
-              Isso tira todo mundo {soPresentes ? "que já chegou " : ""}da equipe atual e sorteia de novo. Pulseira já
-              entregue não muda sozinha — só faça antes de entregar.
+        {comEquipe === 0 ? (
+          <>
+            <p className="text-sm text-apagado">
+              O sorteio divide todos os confirmados por igual entre as {equipes.length} equipes
+              {pessoas.length > 0 && ` — cerca de ${cadaUma} em cada`}. Quem confirmar depois recebe a cor na
+              Validação, sempre na equipe com menos gente.
             </p>
-            <span className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={ocupado}
-                onClick={async () => {
-                  await enviar({ acao: "sortear", eventoId, soPresentes, refazer: true });
-                  setRefazendo(false);
-                }}
-                className="botao-primario bg-ruim px-4 py-2 text-sm hover:bg-ruim/85"
-              >
-                Refazer mesmo assim
+            <button
+              type="button"
+              disabled={ocupado || pessoas.length === 0}
+              onClick={() => sortear(false)}
+              className="botao-primario"
+            >
+              {ocupado && <Girando />}
+              Sortear os {pessoas.length} confirmados
+            </button>
+          </>
+        ) : (
+          <>
+            <ul className="flex flex-wrap gap-2">
+              {porEquipe.map((e) => (
+                <li
+                  key={e.id}
+                  className="rounded-full px-3 py-1 text-sm font-semibold tabular-nums"
+                  style={{ background: e.cor, color: textoSobre(e.cor) }}
+                >
+                  {e.nome}: {e.pessoas}
+                </li>
+              ))}
+              {semEquipe > 0 && (
+                <li className="rounded-full border-2 border-dashed border-linha px-3 py-1 text-sm font-semibold text-apagado">
+                  Sem equipe: {semEquipe}
+                </li>
+              )}
+            </ul>
+
+            {/* Troca manual é livre; o aviso só aparece quando a diferença passa de 1. */}
+            {diferenca > 1 && (
+              <div role="status" className="rounded-[10px] bg-laranja/10 p-3 text-sm text-laranja-escuro">
+                <p className="font-semibold">
+                  Equipes desequilibradas: {diferenca} pessoas de diferença entre a maior e a menor.
+                </p>
+                <p className="mt-1 text-tinta/80">
+                  Equilibrar move {trocas} {trocas === 1 ? "pessoa" : "pessoas"} da maior para a menor — primeiro
+                  quem ainda não chegou e não pegou pulseira.
+                </p>
+                <button
+                  type="button"
+                  disabled={ocupado}
+                  onClick={() => enviar({ acao: "equilibrar", eventoId })}
+                  className="botao-secundario mt-2 px-4 py-2 text-sm"
+                >
+                  Equilibrar agora
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {semEquipe > 0 && (
+                <button type="button" disabled={ocupado} onClick={() => sortear(false)} className="botao-primario">
+                  {ocupado && <Girando />}
+                  Sortear os {semEquipe} sem equipe
+                </button>
+              )}
+              <button type="button" disabled={ocupado} onClick={() => setRefazendo(true)} className="botao-secundario">
+                Refazer o sorteio geral
               </button>
-              <button type="button" onClick={() => setRefazendo(false)} className="botao-secundario px-4 py-2 text-sm">
-                Cancelar
-              </button>
-            </span>
-          </div>
+            </div>
+            {refazendo && (
+              <div role="alert" className="rounded-[10px] bg-ruim/10 p-3 text-sm text-ruim">
+                <p className="font-semibold">
+                  Todo mundo sai da equipe atual e os {pessoas.length} são sorteados de novo. Pulseira já entregue não
+                  muda sozinha — só faça antes de entregar.
+                </p>
+                <span className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={ocupado}
+                    onClick={async () => {
+                      await sortear(true);
+                      setRefazendo(false);
+                    }}
+                    className="botao-primario bg-ruim px-4 py-2 text-sm hover:bg-ruim/85"
+                  >
+                    Refazer mesmo assim
+                  </button>
+                  <button type="button" onClick={() => setRefazendo(false)} className="botao-secundario px-4 py-2 text-sm">
+                    Cancelar
+                  </button>
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={busca}
@@ -386,6 +461,10 @@ function Pessoas({
             </option>
           ))}
         </select>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={soPresentes} onChange={(e) => setSoPresentes(e.target.checked)} />
+          Só quem já chegou
+        </label>
       </div>
 
       {visiveis.length === 0 ? (

@@ -7,6 +7,7 @@ import { igrejasParaEscolha, situacaoInscricoes } from "@/lib/eventos";
 import { FormularioEvento, ApagarEvento } from "../FormularioEvento";
 import { ConteudoEvento, type ItemProgramacao, type ItemDuvida } from "../ConteudoEvento";
 import type { Evento } from "@/tipos/db";
+import { CabecalhoEvento } from "../CabecalhoEvento";
 
 export const metadata: Metadata = { title: "Editar evento", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -52,24 +53,18 @@ export default async function EditarEvento({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <Link href="/diretoria/eventos" className="text-sm font-semibold text-apagado hover:underline">
-        ← Eventos
-      </Link>
-      <div className="mt-2 mb-5 flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="titulo text-2xl">{e.nome}</h2>
-        <p className="flex gap-4 text-sm">
-          {e.tem_modalidades && (
+      <CabecalhoEvento
+        evento={e}
+        atual="dados"
+        admin
+        extra={
+          e.tem_modalidades && (
             <Link href="/diretoria/modalidades" className="font-semibold text-laranja-escuro hover:underline">
               Modalidades ({modalidades ?? 0})
             </Link>
-          )}
-          {e.publicado && (
-            <Link href={`/${e.slug}`} className="font-semibold text-apagado hover:underline">
-              Ver no site
-            </Link>
-          )}
-        </p>
-      </div>
+          )
+        }
+      />
 
       {pendencias.length > 0 ? (
         <section className="cartao mb-6 border-laranja/50 bg-laranja/5 p-5">

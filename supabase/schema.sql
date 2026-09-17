@@ -1821,3 +1821,43 @@ end $fn$;
 
 revoke all on function mover_para_equipe(uuid, uuid) from public, anon;
 grant execute on function mover_para_equipe(uuid, uuid) to authenticated;
+
+/*
+ * Equilibra as equipes depois de trocas manuais: tira da maior e põe na
+ * menor, uma pessoa por vez, até a diferença ser de no máximo 1.
+ *
+ * Move primeiro quem ainda não chegou — essa pessoa ainda não pegou a
+ * pulseira, então a troca não custa nada na porta. Devolve quantas moveu.
+ */
+create or replace function equilibrar_equipes(p_evento uuid) returns int
+language plpgsql security definer set search_path = public as $fn$
+declare
+  v_maior uuid; v_menor uuid; v_qmaior int; v_qmenor int;
+  v_pessoa uuid; v_n int := 0;
+begin
+  if not eh_diretoria() then return 0; end if;
+
+  loop
+    select e.id, (select count(*) from inscritos i where i.equipe_id = e.id and i.ativo)
+      into v_maior, v_qmaior
+      from equipes e where e.evento_id = p_evento
+     order by 2 desc, random() limit 1;
+    select e.id, (select count(*) from inscritos i where i.equipe_id = e.id and i.ativo)
+      into v_menor, v_qmenor
+      from equipes e where e.evento_id = p_evento
+     order by 2 asc, random() limit 1;
+
+    exit when v_maior is null or v_qmaior - v_qmenor <= 1;
+
+    select id into v_pessoa from inscritos
+     where equipe_id = v_maior and ativo
+     order by (checkin_em is not null), random()
+     limit 1;
+    update inscritos set equipe_id = v_menor where id = v_pessoa;
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $fn$;
+
+revoke all on function equilibrar_equipes(uuid) from public, anon;
+grant execute on function equilibrar_equipes(uuid) to authenticated;

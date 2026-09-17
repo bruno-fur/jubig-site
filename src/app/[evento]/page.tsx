@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { eventoPorSlug, esportesDoEvento, agruparPorTurno, vagasRestantes } from "@/lib/eventos";
+import { eventoPorSlug, esportesDoEvento, agruparPorTurno, vagasRestantes, eventoJaComecou } from "@/lib/eventos";
 import { formatarData } from "@/lib/validacao";
 import { ChamadaEvento } from "@/components/ChamadaEvento";
 import { Abas } from "@/components/Abas";
@@ -224,7 +224,8 @@ export default async function PaginaEvento({ params }: { params: Promise<{ event
           </section>
         )}
 
-        <PlacarPublico linhas={placar ?? []} />
+        {/* Placar só aparece para o público depois que o evento começa. */}
+        {eventoJaComecou(evento) && <PlacarPublico linhas={placar ?? []} />}
 
         <Abas abas={abas} />
       </div>
