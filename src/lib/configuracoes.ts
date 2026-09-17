@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { INSTAGRAM } from "@/lib/site";
+import { COMUNIDADE_PADRAO } from "@/emails/layout";
 
 export type ConfiguracoesSite = {
   /** Só dígitos, com DDI: 5545999990000 — o formato que o wa.me aceita. */
@@ -11,6 +12,8 @@ export type ConfiguracoesSite = {
   emailContato: string | null;
   /** Nulo = a home usa o texto padrão. */
   quemSomos: string | null;
+  /** Convite da comunidade no WhatsApp (chat.whatsapp.com/...). */
+  comunidade: string;
 };
 
 export const WHATSAPP_PADRAO = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
@@ -31,6 +34,7 @@ export const lerConfiguracoes = cache(async (): Promise<ConfiguracoesSite> => {
     instagram: string | null;
     email_contato: string | null;
     quem_somos: string | null;
+    comunidade_whatsapp?: string | null;
   } | null = null;
 
   try {
@@ -39,11 +43,9 @@ export const lerConfiguracoes = cache(async (): Promise<ConfiguracoesSite> => {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
-    const { data } = await supabase
-      .from("configuracoes")
-      .select("whatsapp, instagram, email_contato, quem_somos")
-      .eq("id", 1)
-      .maybeSingle();
+    // "*" e não a lista de colunas: coluna nova que ainda não existe no banco
+    // derrubaria a consulta inteira, e o site perderia o WhatsApp junto.
+    const { data } = await supabase.from("configuracoes").select("*").eq("id", 1).maybeSingle();
     linha = data;
   } catch (e) {
     console.error("[configuracoes] leitura falhou, usando o padrão", e);
@@ -54,5 +56,6 @@ export const lerConfiguracoes = cache(async (): Promise<ConfiguracoesSite> => {
     instagram: linha?.instagram || INSTAGRAM,
     emailContato: linha?.email_contato || null,
     quemSomos: linha?.quem_somos || null,
+    comunidade: linha?.comunidade_whatsapp || COMUNIDADE_PADRAO,
   };
 });

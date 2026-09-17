@@ -19,7 +19,16 @@ const Pedido = z.object({
     .max(2000)
     .nullish()
     .transform((v) => (v ? v : null)),
+  comunidade: z
+    .string()
+    .trim()
+    .max(200)
+    .nullish()
+    .transform((v) => (v ? v : null)),
 });
+
+/** Só convite de grupo/comunidade do WhatsApp: qualquer outro link ali seria engano. */
+const CONVITE = /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]{10,40}$/;
 
 /** Aceita "@jubigoficial", "jubigoficial" ou o link do perfil. */
 function limparInstagram(valor: string) {
@@ -52,6 +61,11 @@ export async function PATCH(req: Request) {
   if (d.emailContato && !z.email().safeParse(d.emailContato).success)
     return NextResponse.json({ erro: "email_invalido" }, { status: 400 });
 
+  // Aceita o link colado com "?" ou "/" no fim, como o WhatsApp às vezes copia.
+  const conviteLimpo = d.comunidade ? d.comunidade.split(/[?#]/)[0].replace(/\/$/, "") : null;
+  if (conviteLimpo && !CONVITE.test(conviteLimpo))
+    return NextResponse.json({ erro: "comunidade_invalida" }, { status: 400 });
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("configuracoes")
@@ -60,6 +74,7 @@ export async function PATCH(req: Request) {
       instagram,
       email_contato: d.emailContato,
       quem_somos: d.quemSomos,
+      comunidade_whatsapp: conviteLimpo,
       atualizado_em: new Date().toISOString(),
       atualizado_por: sessao.userId,
     })

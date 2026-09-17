@@ -29,6 +29,7 @@ export default async function Home() {
       <Onde igrejas={igrejas} />
       <Instagram usuario={instagram.usuario ?? config.instagram} postagens={instagram.postagens} />
       <Galeria limite={6} verTodas />
+      <Comunidade link={config.comunidade} />
       <Contato whatsapp={config.whatsapp} instagram={config.instagram} />
     </>
   );
@@ -295,6 +296,42 @@ function Instagram({ usuario, postagens }: { usuario: string; postagens: Postage
             </li>
           ))}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Convite para a comunidade no WhatsApp: é por lá que a diretoria avisa todo
+ * mundo. Fica antes do contato — entrar na comunidade responde a maioria das
+ * dúvidas antes de alguém precisar perguntar.
+ */
+function Comunidade({ link }: { link: string }) {
+  return (
+    <section id="comunidade" className="mx-auto max-w-7xl scroll-mt-24 px-4 pt-14 sm:px-6 lg:px-8 lg:pt-20">
+      <div className="revelar flex flex-wrap items-center gap-6 rounded-[16px] bg-[#1F5C2C] p-7 text-white lg:p-10">
+        <span
+          aria-hidden="true"
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/15 lg:h-20 lg:w-20"
+        >
+          <svg viewBox="0 0 24 24" className="h-9 w-9 lg:h-11 lg:w-11" fill="currentColor">
+            <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3z" />
+          </svg>
+        </span>
+        <div className="min-w-[240px] flex-1">
+          <h2 className="text-2xl text-white lg:text-3xl">Entre na comunidade da JUBIG</h2>
+          <p className="mt-1 text-white/80 lg:text-lg">
+            Datas, abertura de inscrição e avisos dos eventos saem primeiro por lá, no WhatsApp.
+          </p>
+        </div>
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="botao-primario bg-white text-[#1F5C2C] hover:bg-white/90"
+        >
+          Entrar na comunidade
+        </a>
       </div>
     </section>
   );

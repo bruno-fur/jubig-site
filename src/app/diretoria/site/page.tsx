@@ -35,6 +35,7 @@ export default async function Site() {
           instagram: config.instagram,
           emailContato: config.emailContato ?? "",
           quemSomos: config.quemSomos ?? "",
+          comunidade: config.comunidade,
         }}
       />
 

@@ -9,12 +9,13 @@ const MENSAGEM: Record<string, string> = {
   whatsapp_invalido: "WhatsApp inválido. Use DDD e número, ex.: (45) 99811-2434 — ou +595 para Paraguai.",
   instagram_invalido: "Instagram inválido. Use só o nome do perfil, ex.: jubigoficial.",
   email_invalido: "E-mail de contato inválido.",
+  comunidade_invalida: "Link da comunidade inválido. Cole o convite inteiro, ex.: https://chat.whatsapp.com/AbCd123...",
   pedido_invalido: "WhatsApp e Instagram são obrigatórios.",
   sem_permissao: "Só administrador muda os dados do site.",
-  falha_ao_gravar: "Não deu para salvar. Confira se o schema.sql novo já foi aplicado no Supabase.",
+  falha_ao_gravar: "Não deu para salvar. Confira se o schema.sql mais recente já foi aplicado no Supabase.",
 };
 
-type Dados = { whatsapp: string; instagram: string; emailContato: string; quemSomos: string };
+type Dados = { whatsapp: string; instagram: string; emailContato: string; quemSomos: string; comunidade: string };
 
 /** "5545998112434" → "+55 45 99811-2434", só para leitura fácil no campo. */
 function legivel(digitos: string) {
@@ -38,6 +39,7 @@ export function FormularioSite({ inicial }: { inicial: Dados }) {
           instagram: d.instagram,
           emailContato: d.emailContato || null,
           quemSomos: d.quemSomos || null,
+          comunidade: d.comunidade || null,
         });
       }}
       className="cartao space-y-4 p-5"
@@ -77,6 +79,28 @@ export function FormularioSite({ inicial }: { inicial: Dados }) {
           <span className="mt-1 block text-xs text-apagado">Pode colar o link do perfil ou o @.</span>
         </label>
       </div>
+
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-semibold text-tinta">Comunidade da JUBIG no WhatsApp</span>
+        <input
+          type="url"
+          value={d.comunidade}
+          onChange={(e) => mudar("comunidade", e.target.value)}
+          placeholder="https://chat.whatsapp.com/..."
+          className="campo-texto"
+        />
+        <span className="mt-1 block text-xs text-apagado">
+          Convite onde todos recebem os avisos. Aparece na home, no rodapé e no e-mail de vaga confirmada.
+          {d.comunidade && (
+            <>
+              {" "}
+              <a href={d.comunidade} target="_blank" rel="noreferrer" className="font-semibold text-laranja-escuro hover:underline">
+                Testar o link
+              </a>
+            </>
+          )}
+        </span>
+      </label>
 
       <label className="block">
         <span className="mb-1.5 block text-sm font-semibold text-tinta">E-mail de contato</span>

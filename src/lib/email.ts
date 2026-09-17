@@ -15,7 +15,7 @@ import {
   type DadosLembrete,
   type DadosCancelamento,
 } from "@/emails/templates";
-import { WHATSAPP_PADRAO } from "@/emails/layout";
+import { COMUNIDADE_PADRAO, WHATSAPP_PADRAO } from "@/emails/layout";
 import { lerConfiguracoes } from "@/lib/configuracoes";
 
 /*
@@ -58,10 +58,11 @@ async function enviar(para: string, msg: { subject: string; html: string }) {
     return { ok: false as const, erro: "sem_credencial" };
   }
 
-  // WhatsApp do rodapé: o template sai com o padrão; aqui vira o de Diretoria > Site.
-  const { whatsapp } = await lerConfiguracoes();
-  const html =
-    whatsapp === WHATSAPP_PADRAO ? msg.html : msg.html.replaceAll(`wa.me/${WHATSAPP_PADRAO}`, `wa.me/${whatsapp}`);
+  // WhatsApp e comunidade: o template sai com o padrão; aqui viram os de Diretoria > Site.
+  const { whatsapp, comunidade } = await lerConfiguracoes();
+  const html = msg.html
+    .replaceAll(`wa.me/${WHATSAPP_PADRAO}`, `wa.me/${whatsapp}`)
+    .replaceAll(COMUNIDADE_PADRAO, comunidade);
 
   try {
     /*

@@ -1861,3 +1861,7 @@ end $fn$;
 
 revoke all on function equilibrar_equipes(uuid) from public, anon;
 grant execute on function equilibrar_equipes(uuid) to authenticated;
+
+-- Link da comunidade da JUBIG no WhatsApp, onde saem os avisos para todos.
+-- Editável em Diretoria > Site; vazio, o site usa o link padrão do código.
+alter table configuracoes add column if not exists comunidade_whatsapp text;

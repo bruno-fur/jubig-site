@@ -8,6 +8,9 @@ type Estado = "feliz" | "joia" | "nao" | "nervoso" | "choro" | "choque" | "heh" 
  */
 export const WHATSAPP_PADRAO = process.env.NEXT_PUBLIC_WHATSAPP_DIRETORIA ?? "5545999999999";
 
+/** Comunidade da JUBIG no WhatsApp. Mesmo esquema: `email.ts` troca pelo de Diretoria > Site. */
+export const COMUNIDADE_PADRAO = "https://chat.whatsapp.com/FakZF6I3FMKAMhCgLHMctK";
+
 export const CORES = {
   laranja: "#D94C1A",
   laranjaEscuro: "#A83A12",

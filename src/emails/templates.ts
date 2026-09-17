@@ -1,4 +1,4 @@
-import { layout, texto, caixaDados, selo, CORES } from "./layout.ts";
+import { layout, texto, caixaDados, selo, CORES, COMUNIDADE_PADRAO } from "./layout.ts";
 import { urlDoSite } from "../lib/site.ts";
 
 export type DadosInscricao = {
@@ -104,6 +104,7 @@ export function emailInscricaoAprovada(d: DadosInscricao) {
         texto(
           `${selo("Confirmada", "#1F5C2C", "#DFF0E2")}`,
           "Os ingressos com QR Code já estão liberados — um para cada pessoa. Baixe ou imprima e leve na chegada: é o que agiliza a portaria.",
+          `Os avisos do evento saem na <a href="${COMUNIDADE_PADRAO}" style="color:${CORES.laranjaEscuro};font-weight:600;">comunidade da JUBIG no WhatsApp</a> — entre para não perder nada.`,
         ),
       botao: { texto: "Baixar os ingressos", url: `${urlDoSite()}/inscricoes/${d.codigo}/ingressos` },
       rodapeWhatsApp: `Olá! Minha inscrição ${d.codigo} foi confirmada.`,

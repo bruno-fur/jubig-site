@@ -3,7 +3,7 @@ import { lerConfiguracoes } from "@/lib/configuracoes";
 
 /** Contatos vêm de Diretoria > Site. */
 export async function Rodape() {
-  const { whatsapp: WHATSAPP, instagram: INSTAGRAM } = await lerConfiguracoes();
+  const { whatsapp: WHATSAPP, instagram: INSTAGRAM, comunidade } = await lerConfiguracoes();
 
   return (
     <footer className="mt-16 border-t border-linha bg-tinta text-creme print:hidden">
@@ -51,6 +51,11 @@ export async function Rodape() {
         <div className="text-sm">
           <p className="mb-2 font-semibold">Falar com a gente</p>
           <ul className="space-y-1 text-creme/70">
+            <li>
+              <a href={comunidade} className="hover:text-laranja" target="_blank" rel="noreferrer">
+                Comunidade no WhatsApp
+              </a>
+            </li>
             <li>
               <a
                 href={`https://wa.me/${WHATSAPP}`}
