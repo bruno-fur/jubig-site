@@ -119,6 +119,10 @@ export type Inscricao = {
   parcelas: number;
   valor_centavos: number;
   motivo_recusa: string | null;
+  /** Inscrição feita pela diretoria na mesa, no dia do evento. */
+  balcao?: boolean;
+  forma_pagamento?: FormaPagamento | null;
+  observacao?: string | null;
   cancelada_em: string | null;
   cancelada_por: string | null;
   motivo_cancelamento: string | null;
@@ -293,4 +297,14 @@ export type PontoEquipe = {
   valor: number;
   motivo: string | null;
   criado_em: string;
+};
+
+/** Como a inscrição foi paga. `pix` é o caminho do site; o resto vem do balcão. */
+export type FormaPagamento = "pix" | "dinheiro" | "cartao" | "cortesia";
+
+export const ROTULO_FORMA: Record<FormaPagamento, string> = {
+  pix: "PIX",
+  dinheiro: "Dinheiro",
+  cartao: "Cartão (maquininha)",
+  cortesia: "Cortesia",
 };

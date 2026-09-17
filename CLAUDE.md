@@ -246,6 +246,19 @@ garante que sempre sobre ao menos um admin.
 - [x] Visão geral mostra um evento por vez (`?evento=slug`)
 - [ ] Congresso: gincana por equipes ainda a alinhar com a diretoria
 
+### 11. Inscrição no balcão e parcelas por mês
+- [x] `criar_inscricao_balcao`: a diretoria inscreve quem chegou no dia e
+      pagou na mesa. Já nasce `confirmada`, com ingresso, marcada em
+      `balcao` + `forma_pagamento` (dinheiro, cartão, PIX, cortesia). Ignora
+      a janela de inscrição do site; **mantém** vaga, idade, CPF único e
+      igreja da lista. Diretoria > Inscrições > "+ Inscrição no balcão"
+- [x] Pagamentos conta balcão como quitado: sem isso, toda inscrição do dia
+      ficaria para sempre em "sem comprovante"
+- [x] **Uma parcela por mês até o mês do evento** (`parcelas_permitidas`):
+      com teto 4x, um congresso em fevereiro aceita 4x em novembro, 3x em
+      dezembro, 2x em janeiro e só à vista em fevereiro. Vale na tela, na API
+      e no banco (trigger + `criar_inscricao`)
+
 **Cota do Gmail:** ~500 destinatários/dia somando tudo. Disparo em massa
 (avisos, lembretes) para em 350 para não derrubar os e-mails de inscrição.
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { parcelasDisponiveis } from "@/lib/parcelas";
 import { pegarSessao } from "@/lib/sessao";
 import { Emails } from "@/lib/email";
 import {
@@ -68,8 +69,13 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!evento) return NextResponse.json({ erro: "evento_nao_encontrado" }, { status: 404 });
 
-  if (parcelas > evento.max_parcelas) {
-    return NextResponse.json({ erro: "parcelas_acima_do_limite" }, { status: 400 });
+  // Uma parcela por mes ate o mes do evento: o limite cai sozinho conforme a
+  // data chega. O banco confere de novo em criar_inscricao.
+  if (parcelas > parcelasDisponiveis(evento)) {
+    return NextResponse.json(
+      { erro: "parcelas_acima_do_limite", maximo: parcelasDisponiveis(evento) },
+      { status: 400 }
+    );
   }
 
   /*
@@ -167,7 +173,7 @@ function traduzirErro(msg: string) {
   if (msg.includes("inscricoes_nao_abertas")) return { erro: "inscricoes_nao_abertas" };
   if (msg.includes("evento_sem_inscricao")) return { erro: "evento_sem_inscricao" };
   if (msg.includes("evento_nao_encontrado")) return { erro: "evento_nao_encontrado" };
-  if (msg.includes("parcelas fora do permitido")) return { erro: "parcelas_acima_do_limite" };
+  if (msg.includes("parcelas_acima_do_limite")) return { erro: "parcelas_acima_do_limite" };
   // A política de insert é a camada 4: chegar aqui significa e-mail não confirmado.
   if (/row-level security|violates row-level/i.test(msg)) return { erro: "email_nao_confirmado" };
   console.error("[inscricoes] erro inesperado", msg);

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatarReais } from "@/lib/validacao";
+import { ROTULO_FORMA, type FormaPagamento } from "@/tipos/db";
 import type { ComprovanteDoPagamento, InscricaoDoPagamento, SituacaoPagamento } from "@/lib/pagamentos";
 
 type Comprovante = Omit<ComprovanteDoPagamento, "caminho"> & { url: string | null; ehPdf: boolean };
@@ -285,8 +286,16 @@ function ListaInscricoes({ itens }: { itens: InscricaoDoPagamento[] }) {
               {i.responsavel} · {i.pessoas} {i.pessoas === 1 ? "pessoa" : "pessoas"}
             </p>
             <p className="text-xs text-apagado">
-              Inscrita {quando(i.criadaEm)} · {i.enviados} {i.enviados === 1 ? "comprovante" : "comprovantes"}
-              {i.parcelas > 1 && ` · ${i.aprovados}/${i.parcelas} parcelas aprovadas`}
+              Inscrita {quando(i.criadaEm)}
+              {i.balcao ? (
+                <> · no balcão{i.forma && `, em ${ROTULO_FORMA[i.forma as FormaPagamento].toLowerCase()}`}</>
+              ) : (
+                <>
+                  {" "}
+                  · {i.enviados} {i.enviados === 1 ? "comprovante" : "comprovantes"}
+                  {i.parcelas > 1 && ` · ${i.aprovados}/${i.parcelas} parcelas aprovadas`}
+                </>
+              )}
             </p>
           </div>
           <div className="shrink-0 text-right">

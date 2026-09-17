@@ -13,6 +13,7 @@ import {
   igrejasParaEscolha,
 } from "@/lib/eventos";
 import { formatarData, formatarReais } from "@/lib/validacao";
+import { avisoParcelas, parcelasDisponiveis } from "@/lib/parcelas";
 import { FormularioInscricao } from "./FormularioInscricao";
 import { Contagem } from "@/components/Contagem";
 import { dataHoraBrasilia } from "@/components/ChamadaEvento";
@@ -124,7 +125,8 @@ export default async function PaginaInscricao({
           nome: evento.nome,
           dataEvento: evento.data_evento,
           idadeMinima: evento.idade_minima,
-          maxParcelas: evento.max_parcelas,
+          maxParcelas: parcelasDisponiveis(evento),
+          avisoParcelas: avisoParcelas(evento),
           maxEsportesPorTurno: evento.max_esportes_por_turno ?? 0,
           temModalidades: evento.tem_modalidades,
           valorCentavos: evento.valor_centavos,

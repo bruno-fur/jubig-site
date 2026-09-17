@@ -334,9 +334,12 @@ create or replace function conferir_parcelas() returns trigger
 language plpgsql security definer set search_path = public as $fn$
 declare v_max int;
 begin
-  select max_parcelas into v_max from eventos where id = new.evento_id;
+  -- Teto do evento e o quanto o calendario ainda permite: uma parcela por mes
+  -- ate o mes do evento (ver parcelas_permitidas, no fim deste arquivo).
+  select parcelas_permitidas(max_parcelas, data_evento) into v_max
+    from eventos where id = new.evento_id;
   if new.parcelas < 1 or new.parcelas > coalesce(v_max, 1) then
-    raise exception 'parcelas fora do permitido para este evento (max %)', coalesce(v_max, 1);
+    raise exception 'parcelas_acima_do_limite (maximo % agora)', coalesce(v_max, 1);
   end if;
   return new;
 end $fn$;
@@ -719,6 +722,12 @@ begin
     if coalesce(v_ocupadas, 0) + v_quantos > v_evento.vagas then
       raise exception 'evento_lotado';
     end if;
+  end if;
+
+  -- Teto do evento e o quanto o calendário ainda permite (ver
+  -- `parcelas_permitidas`, no fim deste arquivo).
+  if p_parcelas < 1 or p_parcelas > parcelas_permitidas(v_evento.max_parcelas, v_evento.data_evento) then
+    raise exception 'parcelas_acima_do_limite';
   end if;
 
   v_codigo := gerar_codigo(v_evento.id);
@@ -1865,3 +1874,145 @@ grant execute on function equilibrar_equipes(uuid) to authenticated;
 -- Link da comunidade da JUBIG no WhatsApp, onde saem os avisos para todos.
 -- Editável em Diretoria > Site; vazio, o site usa o link padrão do código.
 alter table configuracoes add column if not exists comunidade_whatsapp text;
+
+-- ============================================================
+-- Parcelas caem com o passar dos meses
+--
+-- Uma parcela por mês, contando o mês atual. Com o teto do evento em 4x, um
+-- congresso em fevereiro aceita 4x em novembro, 3x em dezembro, 2x em janeiro
+-- e só à vista em fevereiro. Sem isso, quem se inscrevesse na véspera dividiria
+-- em quatro pagamentos dentro da mesma semana.
+-- ============================================================
+create or replace function parcelas_permitidas(p_max int, p_data date) returns int
+language sql stable set search_path = public as $fn$
+  select greatest(1, least(
+    coalesce(p_max, 1),
+    (extract(year from p_data)::int * 12 + extract(month from p_data)::int)
+    - (extract(year from (now() at time zone 'America/Sao_Paulo'))::int * 12
+       + extract(month from (now() at time zone 'America/Sao_Paulo'))::int)
+    + 1
+  ))
+$fn$;
+
+-- ============================================================
+-- Inscrição no balcão
+--
+-- No dia do evento sempre chega quem não se inscreveu pelo site: paga em
+-- dinheiro ou na maquininha ali na mesa. As inscrições pelo site fecham na
+-- data marcada; esta porta continua aberta para a diretoria, e só para ela.
+--
+-- A inscrição já nasce `confirmada` — o dinheiro entrou na hora, não há
+-- comprovante para conferir. Fica marcada em `balcao` e `forma_pagamento`
+-- para a prestação de contas não confundir com PIX.
+-- ============================================================
+alter table inscricoes add column if not exists balcao boolean not null default false;
+alter table inscricoes add column if not exists forma_pagamento text
+  check (forma_pagamento in ('pix', 'dinheiro', 'cartao', 'cortesia'));
+alter table inscricoes add column if not exists observacao text;
+alter table inscricoes add column if not exists criada_por uuid references auth.users on delete set null;
+
+create or replace function criar_inscricao_balcao(
+  p_slug text,
+  p_inscritos jsonb,
+  p_forma text,
+  p_valor_centavos int,
+  p_observacao text
+) returns text
+language plpgsql security definer set search_path = public as $fn$
+declare
+  v_evento eventos%rowtype;
+  v_codigo text;
+  v_inscricao uuid;
+  v_inscrito uuid;
+  v_ocupadas int;
+  v_quantos int;
+  v_valor int;
+  p jsonb;
+  v_item jsonb;
+  v_igreja_id uuid;
+  v_igreja_nome text;
+begin
+  if not eh_diretoria() then
+    raise exception 'sem_permissao';
+  end if;
+  if p_forma not in ('pix', 'dinheiro', 'cartao', 'cortesia') then
+    raise exception 'forma_invalida';
+  end if;
+
+  -- Publicado não importa aqui: a diretoria inscreve na mesa mesmo com o
+  -- evento já encerrado no site. O que continua valendo é ter inscrição.
+  select * into v_evento from eventos where slug = p_slug;
+  if v_evento.id is null then raise exception 'evento_nao_encontrado'; end if;
+  if not v_evento.tem_inscricao then raise exception 'evento_sem_inscricao'; end if;
+
+  v_quantos := coalesce(jsonb_array_length(p_inscritos), 0);
+  if v_quantos < 1 then raise exception 'sem_inscritos'; end if;
+
+  -- Vagas continuam valendo: o ginásio não cresce porque a inscrição foi na mesa.
+  if v_evento.vagas is not null then
+    select ocupadas into v_ocupadas from vagas_por_evento where evento_id = v_evento.id;
+    if coalesce(v_ocupadas, 0) + v_quantos > v_evento.vagas then
+      raise exception 'evento_lotado';
+    end if;
+  end if;
+
+  -- Valor informado (desconto combinado na hora, cortesia) ou o do evento.
+  v_valor := coalesce(p_valor_centavos, v_evento.valor_centavos * v_quantos);
+  if v_valor < 0 then raise exception 'valor_invalido'; end if;
+
+  v_codigo := gerar_codigo(v_evento.id);
+
+  insert into inscricoes (
+    codigo, evento_id, responsavel_id, parcelas, valor_centavos,
+    status, balcao, forma_pagamento, observacao, criada_por
+  )
+  values (
+    v_codigo, v_evento.id, auth.uid(), 1, v_valor,
+    'confirmada', true, p_forma, nullif(btrim(coalesce(p_observacao, '')), ''), auth.uid()
+  )
+  returning id into v_inscricao;
+
+  for p in select * from jsonb_array_elements(p_inscritos) loop
+    if extract(year from age(v_evento.data_evento, (p ->> 'nascimento')::date)) < v_evento.idade_minima then
+      raise exception 'idade_minima:%', p ->> 'nome';
+    end if;
+
+    v_igreja_id := null;
+    if (p ->> 'igrejaId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      select id, nome || ' (' || cidade || ')' into v_igreja_id, v_igreja_nome
+        from igrejas where id = (p ->> 'igrejaId')::uuid and ativa;
+    end if;
+    if v_igreja_id is null then
+      raise exception 'igreja_invalida:%', p ->> 'nome';
+    end if;
+
+    insert into inscritos (inscricao_id, nome, cpf, nascimento, telefone, igreja, igreja_id, de_boa)
+    values (
+      v_inscricao,
+      p ->> 'nome',
+      regexp_replace(p ->> 'cpf', '\D', '', 'g'),
+      (p ->> 'nascimento')::date,
+      nullif(p ->> 'telefone', ''),
+      v_igreja_nome,
+      v_igreja_id,
+      coalesce((p ->> 'deBoa')::boolean, false)
+    )
+    returning id into v_inscrito;
+
+    for v_item in select * from jsonb_array_elements(coalesce(p -> 'esportes', '[]'::jsonb)) loop
+      insert into inscritos_esportes (inscrito_id, esporte_id, nota, parceiros)
+      values (
+        v_inscrito,
+        (case when jsonb_typeof(v_item) = 'string' then v_item #>> '{}' else v_item ->> 'id' end)::uuid,
+        nullif(v_item ->> 'nota', '')::smallint,
+        case when jsonb_typeof(v_item -> 'parceiros') = 'array'
+             then array(select jsonb_array_elements_text(v_item -> 'parceiros')) end
+      );
+    end loop;
+  end loop;
+
+  return v_codigo;
+end $fn$;
+
+revoke all on function criar_inscricao_balcao(text, jsonb, text, int, text) from public, anon;
+grant execute on function criar_inscricao_balcao(text, jsonb, text, int, text) to authenticated;

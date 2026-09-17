@@ -22,7 +22,10 @@ type EventoResumo = {
   nome: string;
   dataEvento: string;
   idadeMinima: number;
+  /** Já descontado o calendário: uma parcela por mês até o mês do evento. */
   maxParcelas: number;
+  /** Aviso de quando esse limite cai. Nulo quando não muda. */
+  avisoParcelas?: string | null;
   maxEsportesPorTurno: number;
   valorCentavos: number;
   /** Congresso não tem modalidade: a etapa de esportes some. */
@@ -540,8 +543,11 @@ function Conferencia({
         <div className="cartao p-5">
           <p className="titulo text-lg">Como quer pagar?</p>
           <p className="mt-1 text-sm text-apagado">
-            O PIX não parcela sozinho: cada parcela é um pagamento e um comprovante separados.
+            O PIX não parcela sozinho: cada parcela é um pagamento e um comprovante separados, um por mês.
           </p>
+          {evento.avisoParcelas && (
+            <p className="mt-2 rounded-[10px] bg-areia px-3 py-2 text-sm text-tinta">{evento.avisoParcelas}</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {Array.from({ length: evento.maxParcelas }, (_, i) => i + 1).map((n) => (
               <button
@@ -622,7 +628,7 @@ function mensagemDeErro(corpo: {
     case "inscricoes_encerradas":
       return "As inscrições deste evento já fecharam.";
     case "parcelas_acima_do_limite":
-      return "Esse número de parcelas não vale para este evento.";
+      return "Esse número de parcelas não vale mais: cada parcela é paga num mês, e o evento está perto. Escolha de novo.";
     default:
       return "Não deu para registrar agora. Tente de novo em instantes.";
   }

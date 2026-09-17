@@ -44,6 +44,9 @@ export type InscricaoDoPagamento = {
   ultimoEnvio: string | null;
   criadaEm: string;
   situacao: SituacaoPagamento;
+  /** Como entrou: null nas inscrições antigas, feitas antes do balcão existir. */
+  forma: string | null;
+  balcao: boolean;
 };
 
 export type ResumoPagamentos = {
@@ -63,6 +66,8 @@ type Linha = {
   valor_centavos: number;
   criado_em: string;
   responsavel_id: string;
+  balcao: boolean | null;
+  forma_pagamento: string | null;
   comprovantes: {
     id: string;
     parcela: number;
@@ -91,7 +96,7 @@ export async function pagamentosDoEvento(supabase: SupabaseClient, eventoId: str
     supabase
       .from("inscricoes")
       .select(
-        "codigo, status, parcelas, valor_centavos, criado_em, responsavel_id, comprovantes(id, parcela, caminho, enviado_em, aprovado, avaliado_em, avaliado_por, motivo), inscritos(count)"
+        "*, comprovantes(id, parcela, caminho, enviado_em, aprovado, avaliado_em, avaliado_por, motivo), inscritos(count)"
       )
       .eq("evento_id", eventoId)
       .order("criado_em", { ascending: true })
@@ -117,7 +122,13 @@ export async function pagamentosDoEvento(supabase: SupabaseClient, eventoId: str
     const aprovadas = new Set(i.comprovantes.filter((c) => c.aprovado === true).map((c) => c.parcela));
     const pendentes = i.comprovantes.filter((c) => c.aprovado === null).length;
     const recusados = i.comprovantes.filter((c) => c.aprovado === false).length;
-    const pago = Math.min(i.valor_centavos, aprovadas.size * valorParcela);
+    /*
+     * Balcão já entrou no caixa: dinheiro ou maquininha na mesa, sem
+     * comprovante para conferir. Sem isto, cada inscrição feita no dia do
+     * evento apareceria para sempre na fila de "sem comprovante".
+     */
+    const noBalcao = i.balcao === true;
+    const pago = noBalcao ? i.valor_centavos : Math.min(i.valor_centavos, aprovadas.size * valorParcela);
     const falta = i.valor_centavos - pago;
     const cancelada = i.status === "cancelada";
     const responsavel = porId.get(i.responsavel_id);
@@ -163,6 +174,8 @@ export async function pagamentosDoEvento(supabase: SupabaseClient, eventoId: str
       ultimoEnvio: ultimo,
       criadaEm: i.criado_em,
       situacao,
+      forma: i.forma_pagamento ?? null,
+      balcao: noBalcao,
     });
 
     for (const c of i.comprovantes) {

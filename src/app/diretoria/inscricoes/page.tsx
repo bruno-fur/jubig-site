@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { exigirDiretoria } from "@/lib/sessao";
 import { createClient } from "@/lib/supabase/server";
 import { todosOsUsuarios } from "@/lib/usuarios";
@@ -59,7 +60,17 @@ export default async function Inscricoes({
   }));
 
   return (
-    <ListaInscricoes
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-apagado">
+          Todas as inscrições, de todos os eventos. Quem chegou no dia e pagou na hora entra pelo balcão.
+        </p>
+        <Link href="/diretoria/inscricoes/balcao" className="botao-primario">
+          + Inscrição no balcão
+        </Link>
+      </div>
+
+      <ListaInscricoes
       linhas={linhas}
       eventos={(eventos ?? []) as { id: string; nome: string }[]}
       inicial={{
@@ -67,7 +78,8 @@ export default async function Inscricoes({
         status: filtros.status ?? "",
         responsavel: filtros.responsavel ?? "",
         q: filtros.q ?? "",
-      }}
-    />
+        }}
+      />
+    </>
   );
 }

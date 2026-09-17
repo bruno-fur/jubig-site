@@ -127,7 +127,7 @@ end $$;
 -- ============================================================
 select espera_erro($x$
   select criar_inscricao('jubigday-2026', 2, '[{"nome":"Quer Parcelar","cpf":"11144477735","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb)
-$x$, 'parcelas fora do permitido', 'parcelas acima de max_parcelas recusado');
+$x$, 'parcelas_acima_do_limite', 'parcelas acima de max_parcelas recusado');
 
 -- ============================================================
 -- Mais de uma modalidade no mesmo turno
@@ -1190,6 +1190,93 @@ begin
   end if;
   raise notice 'ok    diretoria ve o painel do evento';
 end $$;
+
+-- Parcelas caem conforme o mês
+do $$
+declare v_max int; v_data date; v_ok int;
+begin
+  select max_parcelas, data_evento into v_max, v_data from eventos where slug = 'jubigday-2026';
+  -- Teto respeitado
+  if parcelas_permitidas(4, v_data) > 4 then raise exception 'FALHOU — passou do teto'; end if;
+  -- Mês do evento: só à vista
+  if parcelas_permitidas(4, (now() at time zone 'America/Sao_Paulo')::date) <> 1 then
+    raise exception 'FALHOU — evento neste mes deveria ser 1x';
+  end if;
+  -- Evento que já passou também
+  if parcelas_permitidas(4, (now() - interval '2 months')::date) <> 1 then
+    raise exception 'FALHOU — evento passado deveria ser 1x';
+  end if;
+  -- Daqui a 3 meses, com teto 4: cabem 4 (mes atual + 3)
+  v_ok := parcelas_permitidas(4, (date_trunc('month', now() at time zone 'America/Sao_Paulo') + interval '3 months')::date);
+  if v_ok <> 4 then raise exception 'FALHOU — 3 meses a frente deveria dar 4x, deu %', v_ok; end if;
+  -- Daqui a 1 mês, com teto 4: só 2 (este mês e o que vem)
+  v_ok := parcelas_permitidas(4, (date_trunc('month', now() at time zone 'America/Sao_Paulo') + interval '1 month')::date);
+  if v_ok <> 2 then raise exception 'FALHOU — 1 mes a frente deveria dar 2x, deu %', v_ok; end if;
+  raise notice 'ok    parcelas caem conforme o mes (teto %)', v_max;
+end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  perform espera_erro(
+    $x$ select criar_inscricao('jubigday-2026', 9, '[{"nome":"Teste Parcela","cpf":"39053344705","nascimento":"2000-01-01","telefone":"+5545999990000","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true,"esportes":[]}]'::jsonb) $x$,
+    'parcelas_acima_do_limite', 'parcelas acima do permitido recusadas');
+end $$;
+set role postgres;
+
+-- ============================================================
+-- Inscrição no balcão
+-- ============================================================
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+do $$
+begin
+  perform espera_erro(
+    $x$ select criar_inscricao_balcao('jubigday-2026',
+      '[{"nome":"Balcao Comum","cpf":"12345678909","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true}]'::jsonb,
+      'dinheiro', null, null) $x$,
+    'sem_permissao', 'usuario comum nao inscreve no balcao');
+end $$;
+
+set request.jwt.claim.sub = '44444444-4444-4444-4444-444444444444';
+do $$
+declare v_codigo text; v_i inscricoes%rowtype; v_ingresso uuid;
+begin
+  v_codigo := criar_inscricao_balcao('jubigday-2026',
+    '[{"nome":"Maria do Balcao","cpf":"12345678909","nascimento":"2000-01-01","telefone":"+5545999990000","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true}]'::jsonb,
+    'cartao', null, 'Pagou na maquininha');
+  select * into v_i from inscricoes where codigo = v_codigo;
+  if v_i.status <> 'confirmada' then raise exception 'FALHOU — balcao deveria nascer confirmada, veio %', v_i.status; end if;
+  if not v_i.balcao or v_i.forma_pagamento <> 'cartao' then raise exception 'FALHOU — nao marcou balcao/forma'; end if;
+  if v_i.parcelas <> 1 then raise exception 'FALHOU — balcao parcelou'; end if;
+
+  select ingresso into v_ingresso from inscritos where inscricao_id = v_i.id;
+  if v_ingresso is null then raise exception 'FALHOU — inscrito do balcao sem ingresso'; end if;
+  raise notice 'ok    diretoria inscreve no balcao, ja confirmada (%)', v_codigo;
+
+  -- Mesmo CPF não entra duas vezes, nem pelo balcão.
+  perform espera_erro(
+    $x$ select criar_inscricao_balcao('jubigday-2026',
+      '[{"nome":"Maria de novo","cpf":"12345678909","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true}]'::jsonb,
+      'dinheiro', null, null) $x$,
+    'duplicate key', 'CPF repetido recusado tambem no balcao');
+
+  -- Igreja tem de ser da lista, como no site.
+  perform espera_erro(
+    $x$ select criar_inscricao_balcao('jubigday-2026',
+      '[{"nome":"Sem Igreja","cpf":"12345679620","nascimento":"2000-01-01","igrejaId":"","deBoa":true}]'::jsonb,
+      'dinheiro', null, null) $x$,
+    'igreja_invalida', 'balcao exige igreja da lista');
+
+  -- Forma de pagamento fora da lista.
+  perform espera_erro(
+    $x$ select criar_inscricao_balcao('jubigday-2026',
+      '[{"nome":"Forma Errada","cpf":"12345679620","nascimento":"2000-01-01","igrejaId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","deBoa":true}]'::jsonb,
+      'boleto', null, null) $x$,
+    'forma_invalida', 'forma de pagamento invalida recusada');
+end $$;
+set role postgres;
 
 -- ============================================================
 -- Equipes do JubigDay
